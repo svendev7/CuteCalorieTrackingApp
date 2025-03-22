@@ -1,5 +1,5 @@
 // components/Footer.tsx
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { View, StyleSheet, TouchableOpacity, Animated, Dimensions } from 'react-native';
 import Union from '@assets/Union.svg';
 import Plus from '@assets/Plus.svg';
@@ -11,12 +11,23 @@ import Custom from '@assets/Custom.svg';
 
 const { width, height } = Dimensions.get('window');
 
-const Footer = ({ onPlusPress }) => {
+const Footer = ({ onPlusPress, isVisible }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const MealAnim = useRef(new Animated.Value(0)).current;
   const ScanAnim = useRef(new Animated.Value(0)).current;
   const CustomAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
+
+  // Animate footer visibility
+  useEffect(() => {
+    Animated.spring(slideAnim, {
+      toValue: isVisible ? 0 : 1,
+      useNativeDriver: true,
+      tension: 65,
+      friction: 10,
+    }).start();
+  }, [isVisible]);
 
   const toggleMenu = () => {
     const toValue = isExpanded ? 0 : 1;
@@ -79,8 +90,19 @@ const Footer = ({ onPlusPress }) => {
     outputRange: [0, 1]
   });
 
+  // Calculate footer slide animation
+  const footerSlide = slideAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, height * 0.15] // Slide down by footer height
+  });
+
   return (
-    <View style={styles.footerContainer}>
+    <Animated.View style={[
+      styles.footerContainer,
+      {
+        transform: [{ translateY: footerSlide }]
+      }
+    ]}>
       <Union width="100%" height={height * 0.15} style={styles.backgroundSvg} />
 
       <Animated.View style={[styles.popoutButton, { 
@@ -121,7 +143,7 @@ const Footer = ({ onPlusPress }) => {
       <TouchableOpacity style={[styles.sideButton, styles.rightButton]}>
         <Stats width={width * 0.08} height={width * 0.08} />
       </TouchableOpacity>
-    </View>
+    </Animated.View>
   );
 };
 

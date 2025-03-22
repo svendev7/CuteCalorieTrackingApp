@@ -6,7 +6,9 @@
       "@screens/*": ["./src/screens/*"],
       "@navigation/*": ["./src/navigation/*"]
     },
-    "types": [] 
+    "types": [],
+    "esModuleInterop": true,
+    "jsx": "react-native"
   },
   "extends": "expo/tsconfig.base"
 }

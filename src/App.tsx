@@ -4,36 +4,42 @@ import Svg, { Path } from 'react-native-svg';
 import { HomeScreen } from './Screens/home/HomeScreen';
 import Footer from '../src/components/footer';
 const { width, height } = Dimensions.get('window');
+
 export default function App() {
     const [activeTab, setActiveTab] = useState('home');
+    const [isFooterVisible, setIsFooterVisible] = useState(true);
 
     const handleTabPress = (tabName) => {
         setActiveTab(tabName);
-      };
-      const handlePlusPress = () => {
+    };
+
+    const handlePlusPress = () => {
         console.log('Plus button pressed');
-      };
-      return (
+    };
+
+    return (
         <ImageBackground 
-          source={require('@assets/background.jpg')}
-          style={styles.container}
-          imageStyle={{ opacity: 0.2 }}
+            source={require('@assets/background.jpg')}
+            style={styles.container}
+            imageStyle={{ opacity: 0.2 }}
         >
-          <View style={styles.contentContainer}>
-            {activeTab === 'home' && <HomeScreen />}
-          </View>
-          
-          <Footer onPlusPress={handlePlusPress} />
+            <View style={styles.contentContainer}>
+                {activeTab === 'home' && (
+                    <HomeScreen onFooterVisibilityChange={setIsFooterVisible} />
+                )}
+            </View>
+            
+            <Footer onPlusPress={handlePlusPress} isVisible={isFooterVisible} />
         </ImageBackground>
-      );
-    }
-    
-    const styles = StyleSheet.create({
-      container: {
+    );
+}
+
+const styles = StyleSheet.create({
+    container: {
         flex: 1,
-      },
-      contentContainer: {
+    },
+    contentContainer: {
         flex: 1,
         marginBottom: height * 0.117,
-      },
-    });
+    },
+});
