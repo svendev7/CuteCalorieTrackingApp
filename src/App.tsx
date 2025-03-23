@@ -21,7 +21,7 @@ export default function App() {
         <ImageBackground 
             source={require('@assets/background.jpg')}
             style={styles.container}
-            imageStyle={{ opacity: 0.2 }}
+            imageStyle={{ opacity: 0.6 }} // dit laat die kut shit gebeueren als je switched van page
         >
             <View style={styles.contentContainer}>
                 {activeTab === 'home' && (
@@ -40,6 +40,5 @@ const styles = StyleSheet.create({
     },
     contentContainer: {
         flex: 1,
-        marginBottom: height * 0.117,
     },
 });

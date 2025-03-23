@@ -30,7 +30,7 @@ export const styles = StyleSheet.create({
   },
   storeContainer: {
     position: 'absolute',
-    bottom: height * 0.17,
+    bottom: height * 0.29,
     left: width * 0.12,
     alignItems: 'center',
     zIndex: 1,
@@ -44,7 +44,7 @@ export const styles = StyleSheet.create({
   },
   flameContainer: {
     position: 'absolute',
-    bottom: height * 0.17,
+    bottom: height * 0.29,
     right: width * 0.12,
     alignItems: 'center',
     zIndex: 1,
@@ -120,10 +120,11 @@ export const styles = StyleSheet.create({
   },
   bottomContainer: {
     width: '100%',
-    flex: 1,
     backgroundColor: '#7D7C7C',
     borderRadius: 10,
+    paddingVertical: 20,
     zIndex: 999,
+    minHeight: height * 0.5,
   },
   bottomSheetHandle: {
     width: '100%',
@@ -189,5 +190,40 @@ export const styles = StyleSheet.create({
   footerText: {
     color: '#fff',
     fontSize: 16,
+  },
+  bottomSheetWrapper: {
+    position: 'absolute',
+    left: (width - 370) / 2,
+    bottom: height * 0.117 - 110,
+    width: 370,
+    height: height * 0.6,
+    zIndex: 5,
+    overflow: 'hidden',
+    borderTopLeftRadius: 10,
+    borderTopRightRadius: 10,
+  },
+  bottomSheetScrollView: {
+    height: height * 0.8,
+    maxHeight: height * 0.8,
+    borderTopLeftRadius: 10,
+    borderTopRightRadius: 10,
+  },
+  bottomSheetContent: {
+    paddingBottom: 50,
+    minHeight: height * 1.2,
+  },
+  bottomSheetTopShadow: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 30,
+    backgroundColor: '#7D7C7C',
+    borderTopLeftRadius: 10,
+    borderTopRightRadius: 10,
+    zIndex: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 0,
   },
 });
