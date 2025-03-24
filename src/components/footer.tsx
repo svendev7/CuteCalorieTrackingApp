@@ -24,7 +24,7 @@ const Footer = ({ onPlusPress, isVisible }) => {
     Animated.spring(slideAnim, {
       toValue: isVisible ? 0 : 1,
       useNativeDriver: true,
-      tension: 65,
+      tension: 15,
       friction: 10,
     }).start();
   }, [isVisible]);
@@ -103,7 +103,12 @@ const Footer = ({ onPlusPress, isVisible }) => {
         transform: [{ translateY: footerSlide }]
       }
     ]}>
-      <Union width="100%" height={height * 0.15} style={styles.backgroundSvg} />
+      <Union 
+        width="100%" 
+        height={height * 0.15} 
+        style={styles.backgroundSvg} 
+        fill="rgba(30, 30, 30, 0.95)" 
+      />
 
       <Animated.View style={[styles.popoutButton, { 
         transform: [{ translateY: button1Y }],

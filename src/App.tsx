@@ -14,29 +14,39 @@ export default function App() {
     };
 
     const handlePlusPress = () => {
-        console.log('Plus button pressed');
+       
     };
 
     return (
-        <ImageBackground 
-            source={require('@assets/background.jpg')}
-            style={styles.container}
-            imageStyle={{ opacity: 0.6 }} // dit laat die kut shit gebeueren als je switched van page
-        >
-            <View style={styles.contentContainer}>
-                {activeTab === 'home' && (
-                    <HomeScreen onFooterVisibilityChange={setIsFooterVisible} />
-                )}
-            </View>
-            
-            <Footer onPlusPress={handlePlusPress} isVisible={isFooterVisible} />
-        </ImageBackground>
+        <View style={styles.containerWrapper}>
+            <ImageBackground 
+                source={require('@assets/background.jpg')}
+                style={styles.container}
+            >
+                <View style={styles.overlay} />
+                <View style={styles.contentContainer}>
+                    {activeTab === 'home' && (
+                        <HomeScreen onFooterVisibilityChange={setIsFooterVisible} />
+                    )}
+                </View>
+                
+                <Footer onPlusPress={handlePlusPress} isVisible={isFooterVisible} />
+            </ImageBackground>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
+    containerWrapper: {
+        flex: 1,
+    },
     container: {
         flex: 1,
+    },
+    overlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'black',
+        opacity: 0.4,
     },
     contentContainer: {
         flex: 1,

@@ -1,13 +1,26 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Image, Text, TouchableOpacity, Dimensions, ScrollView } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Path, Circle, Defs, Pattern, Rect } from 'react-native-svg';
 import { styles } from './HomeStyles';
 import HeartIcon from '@assets/Heart.svg';
 import FlameIcon from '@assets/Vector.svg';
 import CogIcon from '@assets/Settings.svg';
 import StoreIcon from '@assets/Store.svg';
+import Stats from '@assets/Stats.svg';
 const { width, height } = Dimensions.get('window');
+import { PebblyPal } from '../../components/pebblypal';
+// Background dot pattern
+const DotPattern = () => (
+  <Svg width={width} height={height} style={styles.backgroundDots}>
+    <Defs>
+      <Pattern id="dotPattern" width={40} height={40} patternUnits="userSpaceOnUse">
+        <Circle cx="20" cy="20" r="0.5" fill="rgb(120, 120, 120)" />
+      </Pattern>
+    </Defs>
+    <Rect width={width} height={height} fill="url(#dotPattern)" />
+  </Svg>
+);
 
 const SvgIcon = ({ path, size, color }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24">
@@ -19,57 +32,36 @@ export const HomeScreen = ({ onFooterVisibilityChange }) => {
   const [imageError, setImageError] = useState(false);
   const [scrollPosition, setScrollPosition] = useState(0);
   const scrollViewRef = useRef(null);
-  const bottomSheetHeight = height * 0.8; // 80% of screen height
-  const peekHeight = 150; // Height visible at bottom
+  const bottomSheetHeight = height * 0.7; // 70% of screen height
+  const peekHeight = 180; // Height visible at bottom
   
   // Calculate when the top container is about to be cut off
-  // This is based on the marginTop value (bottomSheetHeight * 0.4) of the topContainer
   const topContainerPosition = bottomSheetHeight * 0.4;
   const shouldShowTopShadow = scrollPosition > topContainerPosition;
   
-  // Center image position variables (from styles)
-  const centerImageTopPosition = height * 0.3; // Approximate position from the top based on styles
+  // Define a simple threshold based on scroll position
+  const hideElementsThreshold = 80;
   
-  // Icon positions based on styles (bottom position from the top of the screen)
-  const iconsBottomPosition = height * 0.75; // Approximate position where icons are
+  // Simple boolean visibility flag for icons only
+  const shouldShowIcons = scrollPosition < hideElementsThreshold;
   
-  // Bottom sheet's initial position from the bottom of the screen
-  const bottomSheetInitialBottom = height * 0.117;
+  // Calories progress
+  const caloriesConsumed = 1250;
+  const caloriesGoal = 2000;
+  const caloriesProgress = Math.min(caloriesConsumed / caloriesGoal, 1);
   
-  // Calculate when the top of the scroll view reaches the icons
-  // This happens when scrollPosition + the height of visible part of bottom sheet = icon position from top
-  const bottomSheetVisibleHeight = height - bottomSheetInitialBottom - peekHeight;
-  const scrollReachesIconsPosition = iconsBottomPosition - bottomSheetVisibleHeight;
+  // Macronutrient tracking
+  const proteinConsumed = 100; // example value
+  const proteinGoal = 150;
+  const proteinProgress = proteinConsumed / proteinGoal;
   
-  // Calculate fade for icons based on when they're about to be covered
-  const iconFadeStart = 70; // Start fading when scrolled this many pixels
-  const iconFadeDuration = 25; // Complete fade over this many pixels 
+  const carbsConsumed = 60; // example value
+  const carbsGoal = 100;
+  const carbsProgress = carbsConsumed / carbsGoal;
   
-  // Calculate icon opacity directly
-  const calculateIconOpacity = () => {
-    if (scrollPosition < iconFadeStart) return 1;
-    if (scrollPosition > iconFadeStart + iconFadeDuration) return 0;
-    return 1 - ((scrollPosition - iconFadeStart) / iconFadeDuration);
-  };
-  
-  const storeOpacity = calculateIconOpacity();
-  const flameOpacity = calculateIconOpacity();
-  
-  // Common fade settings for the center image
-  const fadeStartPosition = topContainerPosition * 0.6 - 20; // Start fading earlier
-  const fadeEndPosition = topContainerPosition * 0.95; // Complete fade sooner
-  
-  // Calculate opacity value based on scroll position (1 = fully visible, 0 = invisible)
-  const calculateOpacity = (startPos, endPos) => {
-    if (scrollPosition <= startPos) return 1; // Fully visible until start position
-    if (scrollPosition >= endPos) return 0; // Fully transparent after end position
-    
-    // Gradually decrease opacity between start and end positions
-    return 1 - ((scrollPosition - startPos) / (endPos - startPos));
-  };
-  
-  // Different fade rates for different elements
-  const centerImageOpacity = calculateOpacity(fadeStartPosition, fadeEndPosition);
+  const fatConsumed = 15; // example value
+  const fatGoal = 45;
+  const fatProgress = fatConsumed / fatGoal;
   
   // Monitor scroll position to control footer visibility
   const handleScroll = (event) => {
@@ -99,6 +91,15 @@ export const HomeScreen = ({ onFooterVisibilityChange }) => {
 
   return (
     <View style={styles.container}>
+      {/* Background Elements */}
+      <View style={styles.backgroundShape1} />
+      <View style={styles.backgroundShape2} />
+      <View style={styles.backgroundShape3} />
+      <View style={styles.backgroundShape5} />
+      
+      {/* Pattern Elements */}
+      <DotPattern />
+      
       {/* Top Left Section */}
       <View style={styles.topLeft}>
         <Text style={styles.name}>Kekke steen</Text>
@@ -106,9 +107,9 @@ export const HomeScreen = ({ onFooterVisibilityChange }) => {
           {[...Array(5)].map((_, i) => (
             <HeartIcon
               key={`heart-${i}`}
-              width={width * 0.05}
-              height={width * 0.05}
-              fill="red"
+              width={width * 0.06}
+              height={width * 0.06}
+              fill="#FF3B30"
               style={styles.heartIcon}
             />
           ))}
@@ -121,30 +122,25 @@ export const HomeScreen = ({ onFooterVisibilityChange }) => {
         accessibilityLabel="Open settings"
       >
         <CogIcon
-          width={width * 0.08}
-          height={width * 0.08}
+          width={width * 0.07}
+          height={width * 0.07}
           fill="white"
         />
       </TouchableOpacity>
-      
+
       {/* Center Image */}
       {imageError ? (
         <Text style={styles.errorText}>Failed to load image</Text>
       ) : (
-        centerImageOpacity > 0 && (
-          <Image
-            source={require('@assets/home/PebblyPal.png')}
-            style={[styles.centerImage, { opacity: centerImageOpacity }]}
-            onError={() => setImageError(true)}
-            resizeMode="contain"
-          />
-        )
+        <PebblyPal
+          style={styles.centerImage}
+        />
       )}
       
-      {/* Store and Flame buttons with calculated opacity */}
-      {storeOpacity > 0 && (
+      {/* Store and Flame buttons with immediate visibility */}
+      {shouldShowIcons && (
         <TouchableOpacity 
-          style={[styles.storeContainer, { opacity: storeOpacity }]}
+          style={styles.storeContainer}
         >
           <StoreIcon
             width={width * 0.08}
@@ -155,14 +151,14 @@ export const HomeScreen = ({ onFooterVisibilityChange }) => {
         </TouchableOpacity>
       )}
 
-      {flameOpacity > 0 && (
+      {shouldShowIcons && (
         <TouchableOpacity 
-          style={[styles.flameContainer, { opacity: flameOpacity }]}
+          style={styles.flameContainer}
         >
           <FlameIcon
             width={width * 0.08}
             height={width * 0.08}
-            fill="orange"
+            fill="#FF9500"
           />
           <Text style={styles.iconText}>150</Text>
         </TouchableOpacity>
@@ -180,59 +176,78 @@ export const HomeScreen = ({ onFooterVisibilityChange }) => {
           style={styles.bottomSheetScrollView}
           contentContainerStyle={[
             styles.bottomSheetContent,
-            { minHeight: bottomSheetHeight * 2 } // Changed from height to minHeight and increased multiplier
+            { minHeight: bottomSheetHeight * 2 }
           ]}
           bounces={true}
           bouncesZoom={true}
           alwaysBounceVertical={true}
           decelerationRate="normal"
-          showsVerticalScrollIndicator={false} // Show scroll indicator
+          showsVerticalScrollIndicator={false}
           onScroll={handleScroll}
-          scrollEventThrottle={16}
-          overScrollMode="always" // For Android
+          scrollEventThrottle={1}
+          overScrollMode="always"
         >
           <View style={[
             styles.topContainer, 
             { 
               marginTop: bottomSheetHeight * 0.4, 
-              borderTopLeftRadius: 10, 
-              borderTopRightRadius: 10 
+              borderTopLeftRadius: 15, 
+              borderTopRightRadius: 15 
             }
           ]}>
             <View style={styles.bottomSheetHandle}>
               {!shouldShowTopShadow && <View style={styles.handleBar} />}
             </View>
-            <View style={styles.peekContent}>
-              <Text style={styles.peekText}>Pull up for more info</Text>
+            <View style={[styles.peekContent, { paddingTop: 5 }]}>
+              {/* Calorie Counter Section */}
+              <View style={styles.calorieSection}>
+                <Text style={styles.calorieTitle}>2.000</Text>
+                <Text style={styles.calorieSubtitle}>REMAINING</Text>
+              </View>
+              
+              {/* Macronutrient Section - Side by side */}
+              <View style={styles.macroRow}>
+                {/* Protein */}
+                <View style={styles.macroColumn}>
+                  <Text style={styles.macroLabel}>Protein</Text>
+                  <View style={styles.macroBarContainer}>
+                    <View style={[styles.macroBar, styles.proteinBar, { width: `${proteinProgress * 100}%` }]} />
+                  </View>
+                  <Text style={styles.macroValue}>{proteinConsumed+ " "}/{ " " + proteinGoal + " "}g</Text>
+                </View>
+                
+                {/* Carbs */}
+                <View style={styles.macroColumn}>
+                  <Text style={styles.macroLabel}>Carbs</Text>
+                  <View style={styles.macroBarContainer}>
+                    <View style={[styles.macroBar, styles.carbsBar, { width: `${carbsProgress * 100}%` }]} />
+                  </View>
+                  <Text style={styles.macroValue}>{carbsConsumed+ " "}/{ " " + carbsGoal + " "}g</Text>
+                </View>
+                
+                {/* Fat */}
+                <View style={styles.macroColumn}>
+                  <Text style={styles.macroLabel}>Fat</Text>
+                  <View style={styles.macroBarContainer}>
+                    <View style={[styles.macroBar, styles.fatBar, { width: `${fatProgress * 100}%` }]} />
+                  </View>
+                  <Text style={styles.macroValue}>{fatConsumed+ " "}/{ " " + fatGoal + " "}g</Text>
+                </View>
+              </View>
             </View>
           </View>
           
           <View style={styles.bottomContainer}>
             <View style={styles.expandedContent}>
-              <Text style={styles.expandedTitle}>Expanded Content</Text>
-              <Text style={styles.expandedText}>
-                This is the expanded content area that shows when you pull up the sheet.
-                You can add any components here that you want to display.
-                Drag back down to hide this content.
-              </Text>
-              {/* Add more content to ensure scrollability */}
-              <View style={{ marginTop: 30 }}>
-                <Text style={styles.expandedTitle}>Additional Content</Text>
-                <Text style={styles.expandedText}>
-                  Here's some additional content to make sure we have enough
-                  to scroll through. This ensures you can see the elastic
-                  bounce effect when you reach the top or bottom of the content.
-                </Text>
-              </View>
-              <View style={{ marginTop: 30 }}>
-                <Text style={styles.expandedTitle}>More Information</Text>
-                <Text style={styles.expandedText}>
-                  Even more content to ensure there's plenty to scroll through.
-                  This makes the elastic bounce effect more noticeable and useful.
-                </Text>
-              </View>
+              <Text style={styles.expandedTitle}>Today's Summary</Text>
               
-              {/* Additional content sections */}
+              <Text style={[styles.expandedTitle, { marginTop: 20 }]}>Recent Meals</Text>
+              <Text style={styles.expandedText}>
+                Track your daily progress here with detailed statistics about your meals
+                and nutritional intake. Add meals and snacks to keep your PebblyPal happy!
+              </Text>
+              
+              {/* The rest of the content remains similar but with updated styling */}
               <View style={{ marginTop: 30 }}>
                 <Text style={styles.expandedTitle}>Daily Stats</Text>
                 <Text style={styles.expandedText}>
