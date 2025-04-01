@@ -1,5 +1,4 @@
-// components/Footer.tsx
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { View, StyleSheet, TouchableOpacity, Animated, Dimensions } from 'react-native';
 import Union from '@assets/Union.svg';
 import Plus from '@assets/Plus.svg';
@@ -8,15 +7,25 @@ import Stats from '@assets/Stats.svg';
 import Meal from '@assets/Meal.svg';
 import Scan from '@assets/Scan.svg';
 import Custom from '@assets/Custom.svg';
-
+import { styles } from './FooterStyles';
 const { width, height } = Dimensions.get('window');
-
-const Footer = ({ onPlusPress }) => {
+// make plus button close when swiping up on homescreen
+const Footer = ({ isVisible }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const MealAnim = useRef(new Animated.Value(0)).current;
   const ScanAnim = useRef(new Animated.Value(0)).current;
   const CustomAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.spring(slideAnim, {
+      toValue: isVisible ? 0 : 1,
+      useNativeDriver: true,
+      tension: 15,
+      friction: 10,
+    }).start();
+  }, [isVisible]);
 
   const toggleMenu = () => {
     const toValue = isExpanded ? 0 : 1;
@@ -41,7 +50,6 @@ const Footer = ({ onPlusPress }) => {
     ]).start();
     
     setIsExpanded(!isExpanded);
-    onPlusPress();
   };
 
   const rotation = rotateAnim.interpolate({
@@ -79,9 +87,24 @@ const Footer = ({ onPlusPress }) => {
     outputRange: [0, 1]
   });
 
+  const footerSlide = slideAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, height * 0.15]
+  });
+
   return (
-    <View style={styles.footerContainer}>
-      <Union width="100%" height={height * 0.15} style={styles.backgroundSvg} />
+    <Animated.View style={[
+      styles.footerContainer,
+      {
+        transform: [{ translateY: footerSlide }]
+      }
+    ]}>
+      <Union 
+        width="100%" 
+        height={height * 0.15} 
+        style={styles.backgroundSvg} 
+        fill="rgba(30, 30, 30, 0.95)" 
+      />
 
       <Animated.View style={[styles.popoutButton, { 
         transform: [{ translateY: button1Y }],
@@ -121,44 +144,9 @@ const Footer = ({ onPlusPress }) => {
       <TouchableOpacity style={[styles.sideButton, styles.rightButton]}>
         <Stats width={width * 0.08} height={width * 0.08} />
       </TouchableOpacity>
-    </View>
+    </Animated.View>
   );
 };
 
-const styles = StyleSheet.create({
-  footerContainer: {
-    position: 'absolute',
-    bottom: -height * 0.016,
-    width: '100%',
-    height: height * 0.115,
-    zIndex: 100,
-  },
-  backgroundSvg: {
-    position: 'absolute',
-    bottom: 0,
-  },
-  sideButton: {
-    position: 'absolute',
-    padding: width * 0.04,
-    bottom: height * 0.037,
-  },
-  leftButton: {
-    left: width * 0.128,
-  },
-  rightButton: {
-    right: width * 0.128,
-  },
-  centerButton: {
-    position: 'absolute',
-    alignSelf: 'center',
-    bottom: height * 0.065,
-    zIndex: 101,
-  },
-  popoutButton: {
-    position: 'absolute',
-    alignSelf: 'center',
-    bottom: height * 0.05,
-  },
-});
 
 export default Footer;

@@ -2,38 +2,60 @@ import React, { useState } from 'react';
 import { View, ImageBackground, StyleSheet, Dimensions } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { HomeScreen } from './Screens/home/HomeScreen';
-import Footer from '../src/components/footer';
+import { SettingsScreen } from './Screens/settings/SettingsScreen';
+import Footer from './components/footer/Footer';
 const { width, height } = Dimensions.get('window');
+
 export default function App() {
     const [activeTab, setActiveTab] = useState('home');
-
-    const handleTabPress = (tabName) => {
-        setActiveTab(tabName);
-      };
-      const handlePlusPress = () => {
-        console.log('Plus button pressed');
-      };
-      return (
-        <ImageBackground 
-          source={require('@assets/background.jpg')}
-          style={styles.container}
-          imageStyle={{ opacity: 0.2 }}
-        >
-          <View style={styles.contentContainer}>
-            {activeTab === 'home' && <HomeScreen />}
-          </View>
-          
-          <Footer onPlusPress={handlePlusPress} />
-        </ImageBackground>
-      );
-    }
+    const [isFooterVisible, setIsFooterVisible] = useState(true);
+    const [customBackground, setCustomBackground] = useState<string | null>(null);
+    const updateCustomBackground = (uri: string | null) => {
+        setCustomBackground(uri);
+    };
     
-    const styles = StyleSheet.create({
-      container: {
+
+    return (
+        <View style={styles.containerWrapper}>
+
+                <View style={styles.overlay} />
+                <View style={styles.contentContainer}>
+                {activeTab === 'home' ? (
+                    <HomeScreen 
+                        onFooterVisibilityChange={setIsFooterVisible}
+                        customBackground={customBackground}
+                        onSettingsPress={() => setActiveTab('settings')}
+                    />
+                    ) : (
+                        <SettingsScreen 
+                            navigate={(tab) => setActiveTab(tab)}
+                            updateCustomBackground={setCustomBackground}
+                            customBackground={customBackground}
+                        />
+                    )}
+                    
+                    {activeTab === 'home' && (
+                        <Footer isVisible={isFooterVisible} />
+                    )}
+                </View>
+        </View>
+    );
+}
+
+const styles = StyleSheet.create({
+    containerWrapper: {
         flex: 1,
-      },
-      contentContainer: {
+        backgroundColor: '#534741',
+    },
+    container: {
         flex: 1,
-        marginBottom: height * 0.117,
-      },
-    });
+    },
+    overlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'black',
+        opacity: 0.4,
+    },
+    contentContainer: {
+        flex: 1,
+    },
+});
