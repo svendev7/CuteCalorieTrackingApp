@@ -1,6 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Image, Text, TouchableOpacity, Dimensions, ScrollView } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Image, Text, TouchableOpacity, Dimensions, ScrollView } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import Svg, { Path, Circle, Defs, Pattern, Rect } from 'react-native-svg';
 import Svg, { Path, Circle, Defs, Pattern, Rect } from 'react-native-svg';
 import { styles } from './HomeStyles';
 import HeartIcon from '@assets/Heart.svg';
@@ -63,6 +66,12 @@ export const HomeScreen = ({ onFooterVisibilityChange,  onSettingsPress, customB
         <View style={styles.heartsContainer}>
           {[...Array(5)].map((_, i) => (
             <HeartIcon
+              key={`heart-${i}`}
+              width={width * 0.06}
+              height={width * 0.06}
+              fill="#FF3B30"
+              style={styles.heartIcon}
+            />
               key={`heart-${i}`}
               width={width * 0.06}
               height={width * 0.06}

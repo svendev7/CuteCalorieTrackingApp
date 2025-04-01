@@ -1,3 +1,7 @@
+<<<<<<< HEAD:src/components/footer/Footer.tsx
+=======
+// components/Footer.tsx
+>>>>>>> d7c09e31ff004fba5531c40b075134041f5a137b:src/components/footer.tsx
 import React, { useRef, useState, useEffect } from 'react';
 import { View, StyleSheet, TouchableOpacity, Animated, Dimensions } from 'react-native';
 import Union from '@assets/Union.svg';
@@ -9,8 +13,13 @@ import Scan from '@assets/Scan.svg';
 import Custom from '@assets/Custom.svg';
 import { styles } from './FooterStyles';
 const { width, height } = Dimensions.get('window');
+<<<<<<< HEAD:src/components/footer/Footer.tsx
 // make plus button close when swiping up on homescreen
 const Footer = ({ isVisible }) => {
+=======
+
+const Footer = ({ onPlusPress, isVisible }) => {
+>>>>>>> d7c09e31ff004fba5531c40b075134041f5a137b:src/components/footer.tsx
   const [isExpanded, setIsExpanded] = useState(false);
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const MealAnim = useRef(new Animated.Value(0)).current;
@@ -18,6 +27,10 @@ const Footer = ({ isVisible }) => {
   const CustomAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
 
+<<<<<<< HEAD:src/components/footer/Footer.tsx
+=======
+  // Animate footer visibility
+>>>>>>> d7c09e31ff004fba5531c40b075134041f5a137b:src/components/footer.tsx
   useEffect(() => {
     Animated.spring(slideAnim, {
       toValue: isVisible ? 0 : 1,
@@ -87,9 +100,16 @@ const Footer = ({ isVisible }) => {
     outputRange: [0, 1]
   });
 
+<<<<<<< HEAD:src/components/footer/Footer.tsx
   const footerSlide = slideAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [0, height * 0.15]
+=======
+  // Calculate footer slide animation
+  const footerSlide = slideAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, height * 0.15] // Slide down by footer height
+>>>>>>> d7c09e31ff004fba5531c40b075134041f5a137b:src/components/footer.tsx
   });
 
   return (

@@ -6,6 +6,7 @@ import { SettingsScreen } from './Screens/settings/SettingsScreen';
 import Footer from './components/footer/Footer';
 const { width, height } = Dimensions.get('window');
 
+
 export default function App() {
     const [activeTab, setActiveTab] = useState('home');
     const [isFooterVisible, setIsFooterVisible] = useState(true);
@@ -49,6 +50,13 @@ const styles = StyleSheet.create({
     },
     container: {
         flex: 1,
+    },
+    overlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'black',
+        opacity: 0.4,
+    },
+    contentContainer: {
     },
     overlay: {
         ...StyleSheet.absoluteFillObject,
