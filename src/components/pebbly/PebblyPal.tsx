@@ -393,6 +393,7 @@ export const PebblyPal = ({ style }: PebblyPalProps) => {
             borderRadius: 50,
             backgroundColor: '#181818',
             opacity: shadowOpacity,
+
           }}
         />
         
