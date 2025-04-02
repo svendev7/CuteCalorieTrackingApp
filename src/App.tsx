@@ -57,13 +57,6 @@ const styles = StyleSheet.create({
         opacity: 0.4,
     },
     contentContainer: {
-    },
-    overlay: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'black',
-        opacity: 0.4,
-    },
-    contentContainer: {
         flex: 1,
     },
 });

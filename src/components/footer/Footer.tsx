@@ -9,7 +9,7 @@ import Scan from '@assets/Scan.svg';
 import Custom from '@assets/Custom.svg';
 import { styles } from './FooterStyles';
 const { width, height } = Dimensions.get('window');
-const Footer = ({ onPlusPress, isVisible }) => {
+const Footer = ({ isVisible }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const MealAnim = useRef(new Animated.Value(0)).current;
@@ -103,7 +103,7 @@ const Footer = ({ onPlusPress, isVisible }) => {
         width="100%" 
         height={height * 0.15} 
         style={styles.backgroundSvg} 
-        fill="rgba(30, 30, 30, 0.95)" 
+        fill="#3F4E4F" 
       />
 
       <Animated.View style={[styles.popoutButton, { 
