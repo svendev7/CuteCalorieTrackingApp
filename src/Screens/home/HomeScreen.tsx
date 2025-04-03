@@ -95,6 +95,8 @@ export const HomeScreen = ({ onFooterVisibilityChange,  onSettingsPress, customB
       
         <TouchableOpacity 
           style={styles.storeContainer}
+          onPress={onSettingsPress} 
+          accessibilityLabel="Open Cosmetics Store"
         >
           <StoreIcon
             width={width * 0.08}
@@ -106,6 +108,8 @@ export const HomeScreen = ({ onFooterVisibilityChange,  onSettingsPress, customB
 
         <TouchableOpacity 
           style={styles.flameContainer}
+          onPress={onSettingsPress} 
+          accessibilityLabel="Open Streaks Page"
         >
           <FlameIcon
             width={width * 0.08}
