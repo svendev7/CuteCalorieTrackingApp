@@ -296,4 +296,25 @@ export const styles = StyleSheet.create({
     zIndex: 0,
     opacity: 0.05,
   },
+  mealsContainer: {
+    marginTop: 10,
+    marginBottom: 20,
+    paddingHorizontal: 20,
+    marginLeft: -15
+  },
+  dateContainer: {
+    marginBottom: 15,
+  },
+  dateText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "500",
+  },
+  separator: {
+    height: 1,
+    backgroundColor: "rgba(120, 120, 120, 0.2)",
+    marginHorizontal: -5,
+    marginLeft: -8,
+    marginBottom: -9,
+  },
 });
