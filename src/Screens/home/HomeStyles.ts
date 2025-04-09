@@ -3,20 +3,24 @@ import { StyleSheet, Dimensions } from 'react-native';
 const { width, height } = Dimensions.get('window');
 
 const colors = {
-  background: '#121212',    
-  text: '#FFFFFF',             
+  background: '#000000',    
+  text: '#EDEDED',             
   secondary: '#A0A0A0',        
   subtleText: '#EEEEEE',       
   handleBar: '#8E8E8E',        
-  cardBackground: '#1E1E1E',   
-  backgroundShape: 'rgba(120, 120, 120, 0.05)', 
+  cardBackground: '#0A0A0A',   
+  cardBorder: '#2E2E2E',
+  backgroundShape: '#0A0A0A', 
   backgroundOpacity: 0.8, 
-  protein: '#F23636',          
-  carbs: '#6DE96D',            
-  fat: '#FF9B9B',              
+  protein: '#D93036',          
+  carbs: '#45A557',            
+  fat: '#FFB224',             
 };
 
 export const styles = StyleSheet.create({
+  imgBackground:{
+    backgroundColor: '#0A0A0A',
+  },
   container: {
     flex: 1,
     paddingTop: height * 0.1,
@@ -35,6 +39,7 @@ export const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 32,
     fontWeight: 'bold',
+    fontFamily: 'Geist Sans',
   },
   heartsContainer: {
     flexDirection: 'row',
@@ -63,7 +68,7 @@ export const styles = StyleSheet.create({
     borderRadius: width * 0.05,
   },
   iconText: {
-    color: colors.text,
+    color: colors.secondary,
     fontSize: Math.min(width, height) * 0.03,
     fontWeight: '600',
     letterSpacing: 0.05,
@@ -119,6 +124,8 @@ export const styles = StyleSheet.create({
     right: 0,
     height: 30,
     backgroundColor: colors.cardBackground,
+    borderColor: colors.cardBorder,
+    borderWidth: 1,
     borderRadius: 15,
     zIndex: 10,
     alignItems: 'center',
@@ -148,6 +155,8 @@ export const styles = StyleSheet.create({
     width: '100%',
     height: 175,
     backgroundColor: colors.cardBackground,
+    borderColor: colors.cardBorder,
+    borderWidth: 1,
     borderRadius: 15,
     marginBottom: 10,
     zIndex: 999,
@@ -155,6 +164,8 @@ export const styles = StyleSheet.create({
   bottomContainer: {
     width: '100%',
     backgroundColor: colors.cardBackground,
+    borderColor: colors.cardBorder,
+    borderWidth: 1,
     borderRadius: 15,
     paddingVertical: 20,
     zIndex: 999,
@@ -317,4 +328,48 @@ export const styles = StyleSheet.create({
     marginLeft: -8,
     marginBottom: -9,
   },
+  loadPreviousDayButton: {
+    backgroundColor: colors.cardBackground, // Or a different subtle color
+    borderColor: colors.cardBorder, // Match card border
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 15,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20, // Space above the button
+    marginBottom: 10, // Space below the button
+    marginHorizontal: 5, // Align with card margins slightly
+    width: '98%', // Make it almost full width
+    alignSelf: 'center',
+  },
+  loadPreviousDayButtonText: {
+    color: colors.text, // White or light grey text
+    fontSize: 16,
+    fontWeight: '500',
+    fontFamily: 'Geist Sans', // Use your app's font
+  },
+  noMealsText: {
+      color: colors.secondary, // Use a subtle grey color
+      fontSize: 14,
+      textAlign: 'center',
+      marginTop: 20,
+      marginBottom: 10,
+      paddingHorizontal: 20, // Add padding if needed
+      fontFamily: 'Geist Sans',
+  },
+  mealEditOverlay: {
+    position: 'absolute',
+    top: 50,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    justifyContent: 'center', // Center content vertically
+    alignItems: 'center',   // Center content horizontally
+    backgroundColor: 'rgba(0, 0, 0, 0.6)', // Semi-transparent background
+    zIndex: 100, // Ensure it's above everything else (MealViewer wrapper has zIndex 5)
+  },
 });
+
+// maak het achtergronden alles wit en de text licht grijs, achtergrond achter de achtrgronden maken we dan donkerlichteg grijs
+// met serieuze text zwart

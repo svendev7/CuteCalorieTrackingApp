@@ -28,16 +28,16 @@ export const styles = StyleSheet.create({
     },
     mealInfo: {
       marginLeft: 12,
-      maxWidth: width * 0.5,
+      maxWidth: width * 0.48,
     },
     mealName: {
-      color: "#FFFFFF",
+      color: "#EDEDED",
       fontSize: 15,
       fontWeight: "600",
       marginBottom: 4,
     },
     macroText: {
-      color: "#A0A0A0",
+      color: "#A1A1A1",
       fontSize: 11,
       marginBottom: 4,
     },
@@ -46,17 +46,16 @@ export const styles = StyleSheet.create({
       alignItems: "center",
     },
     timeText: {
-      color: "#A0A0A0",
+      color: "#A1A1A1",
       fontSize: 12,
       marginLeft: 2,
       
     },
     calorieContainer: {
       alignItems: "center",
-      
     },
     calorieValue: {
-      color: "#FFFFFF",
+      color: "#EDEDED",
       fontSize: 20,
       fontWeight: "bold"
     },

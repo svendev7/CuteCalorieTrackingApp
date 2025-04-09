@@ -4,16 +4,21 @@ const { width, height } = Dimensions.get('window');
 export const styles = StyleSheet.create({
     overlay: {
       position: "absolute",
-      top: 0,
+      top: 300,
       left: 0,
       right: 0,
       bottom: 0,
-      backgroundColor: "rgba(0, 0, 0, 0.8)",
       zIndex: 1000,
+      borderRadius: 15,
+      paddingHorizontal: width * 0.0325,
     },
     container: {
       flex: 1,
-      backgroundColor: "#1E1E1E", 
+      backgroundColor: "#0A0A0A", 
+      borderColor: '#2E2E2E',
+      borderWidth: 1,
+      borderRadius: 15,
+      
     },
     header: {
       paddingTop: height * 0.01,
@@ -56,13 +61,21 @@ export const styles = StyleSheet.create({
     },
     content: {
       flex: 1,
+      paddingBottom: 155,
+      minHeight: height * 0.1,
       padding: width * 0.05,
+      height: height * 0.9,
+      maxHeight: height * 0.9,
+      borderTopLeftRadius: 15,
+      borderTopRightRadius: 15,
     },
     card: {
-      backgroundColor: "#2A2A2A",
+      backgroundColor: "#0A0A0A",
       borderRadius: 15,
       padding: width * 0.05,
       marginBottom: height * 0.05,
+      borderColor: '#2E2E2E',
+      borderWidth: 1,
     },
     mealImageContainer: {
       alignItems: "center",
@@ -83,7 +96,7 @@ export const styles = StyleSheet.create({
       marginBottom: height * 0.03,
     },
     mealNameText: {
-      color: "#FFFFFF",
+      color: "#EDEDED",
       fontSize: 18,
       fontWeight: "bold",
     },
@@ -91,7 +104,7 @@ export const styles = StyleSheet.create({
       marginBottom: height * 0.03,
     },
     nutritionTitle: {
-      color: "#FFFFFF",
+      color: "#EDEDED",
       fontSize: 16,
       fontWeight: "bold",
       marginBottom: height * 0.015,
@@ -108,7 +121,7 @@ export const styles = StyleSheet.create({
       borderBottomColor: "rgba(255, 255, 255, 0.1)",
     },
     nutritionLabel: {
-      color: "#FFFFFF",
+      color: "#EDEDED",
       fontSize: 16,
     },
     nutritionValueContainer: {
@@ -116,19 +129,19 @@ export const styles = StyleSheet.create({
       alignItems: "center",
     },
     nutritionValue: {
-      color: "#FFFFFF",
+      color: "#EDEDED",
       fontSize: 16,
       marginRight: 8,
     },
     saveButton: {
-      backgroundColor: "#FF9500",
+      backgroundColor: "#0B7BFE",
       borderRadius: 10,
       paddingVertical: 12,
       alignItems: "center",
       marginTop: height * 0.02,
     },
     saveButtonText: {
-      color: "#FFFFFF",
+      color: "#EDEDED",
       fontSize: 16,
       fontWeight: "bold",
     },
