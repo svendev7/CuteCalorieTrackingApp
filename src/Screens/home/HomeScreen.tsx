@@ -288,7 +288,11 @@ export const HomeScreen = ({ onFooterVisibilityChange, onSettingsPress, customBa
       <TouchableOpacity style={styles.settingsButton} onPress={onSettingsPress} accessibilityLabel="Open settings">
         <CogIcon width={width * 0.07} height={width * 0.07} fill="white" />
       </TouchableOpacity>
-
+      {imageError ? (
+        <Text style={styles.errorText}>Failed to load image</Text>
+      ) : (
+        <PebblyPal style={styles.centerImage} />
+      )}
       <TouchableOpacity style={styles.storeContainer} onPress={onSettingsPress} accessibilityLabel="Open Cosmetics Store">
         <StoreIcon width={width * 0.08} height={width * 0.08} fill="white" />
         <Text style={styles.iconText}>Store</Text>
