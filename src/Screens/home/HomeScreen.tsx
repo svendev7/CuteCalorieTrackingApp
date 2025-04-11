@@ -19,8 +19,6 @@ import { PebblyPal } from "../../components/pebbly/PebblyPal";
 import { MealViewer } from "../../components/mealViewer/MealViewer"; // Ensure path is correct
 import { MealEditScreen } from "../../Screens/mealEdit/MealEditScreen"; // Ensure path is correct
 
-// --- Dummy Data (Keep as is) ---
-
 // Current day meal data (Friday, Mar 14)
 const todayMealData = [
   {
@@ -183,7 +181,6 @@ export const HomeScreen = ({ onFooterVisibilityChange, onSettingsPress, customBa
   const [displayedDaysData, setDisplayedDaysData] = useState<DayData[]>([]);
   const [nextDayToLoadIndex, setNextDayToLoadIndex] = useState(0);
   const [selectedMeal, setSelectedMeal] = useState<MealData | null>(null); // Moved state here
-
   // --- Initial Day Setup ---
   useEffect(() => {
     // Calculate totals for the initial day
@@ -204,6 +201,7 @@ export const HomeScreen = ({ onFooterVisibilityChange, onSettingsPress, customBa
     };
     setDisplayedDaysData([initialDay]);
   }, []); // Run only once on mount
+
 
 
   useEffect(() => {
