@@ -18,6 +18,10 @@ const colors = {
 };
 
 export const styles = StyleSheet.create({
+  content: {
+    flex: 1,
+    marginTop: 60,
+  },
   imgBackground:{
     backgroundColor: '#0A0A0A',
   },
@@ -25,6 +29,13 @@ export const styles = StyleSheet.create({
     flex: 1,
     paddingTop: height * 0.1,
     backgroundColor: colors.background,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: width * 0.05,
+    marginBottom: height * 0.02,
   },
   topLeft: {
     position: 'absolute',
@@ -81,6 +92,16 @@ export const styles = StyleSheet.create({
     padding: width * 0.02,
     zIndex: 1,
     borderRadius: width * 0.04,
+  },
+  firebaseButton: {
+    backgroundColor: '#4285F4',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  firebaseButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
   },
   centerImage: {
     width: width * 0.5,

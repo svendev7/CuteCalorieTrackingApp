@@ -1,6 +1,6 @@
 // filepath: d:\VSC Projects\CuteCalorieTrackingApp\src\Screens\onboarding\OnboardingNavigator.tsx
 import React, { useState } from 'react';
-import { View, StyleSheet, Dimensions } from 'react-native';
+import { View, StyleSheet, Dimensions, Alert } from 'react-native';
 import WelcomeScreen from './WelcomeScreen';
 import LoginScreen from './LoginScreen';
 import GenderScreen from './GenderScreen';
@@ -15,6 +15,10 @@ import ActivityLevelScreen from './ActivityLevelScreen';
 import CalculatingPlanScreen from './CalculatingPlanScreen';
 import TrackingPreferenceScreen from './TrackingPreferenceScreen'; // Keep this import if you still need it, otherwise remove
 import PremiumOfferScreen from './PremiumOfferScreen';
+import { useAuth } from '../../hooks/useAuth';
+import { db } from '../../config/firebase';
+import { doc, setDoc } from 'firebase/firestore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
 
@@ -37,6 +41,7 @@ interface FormDataState {
 
 const OnboardingNavigator = ({ onComplete }) => {
   const [currentStep, setCurrentStep] = useState(0);
+  const { user } = useAuth();
   // Use the interface for the state
   const [formData, setFormData] = useState<FormDataState>({
     email: '',
@@ -82,10 +87,92 @@ const OnboardingNavigator = ({ onComplete }) => {
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     console.log('Form submitted:', formData);
-    // Add logic here to save data (e.g., to Firebase, AsyncStorage)
-    onComplete(); // Signal that onboarding is finished
+    
+    try {
+      if (!user) {
+        throw new Error('User must be logged in to save preferences');
+      }
+
+      // Calculate BMI and other metrics
+      const currentWeight = parseFloat(formData.currentWeight) || 0;
+      const height = parseFloat(formData.height) || 0;
+      const heightInMeters = height / 100;
+      const bmi = currentWeight / (heightInMeters * heightInMeters);
+      
+      // Calculate daily calorie needs (basic calculation - you might want to use a more sophisticated formula)
+      let bmr = 0;
+      if (formData.gender === 'male') {
+        bmr = 88.362 + (13.397 * currentWeight) + (4.799 * height) - (5.677 * parseFloat(formData.age));
+      } else {
+        bmr = 447.593 + (9.247 * currentWeight) + (3.098 * height) - (4.330 * parseFloat(formData.age));
+      }
+
+      // Activity multiplier
+      const activityMultipliers = {
+        sedentary: 1.2,
+        light: 1.375,
+        moderate: 1.55,
+        active: 1.725,
+        very_active: 1.9
+      };
+      
+      const tdee = bmr * (activityMultipliers[formData.activityLevel] || 1.2);
+
+      // Save user preferences to Firestore
+      const userRef = doc(db, 'users', user.uid);
+      await setDoc(userRef, {
+        // Basic Info
+        email: formData.email,
+        gender: formData.gender,
+        age: parseInt(formData.age) || 0,
+        
+        // Physical Stats
+        currentWeight: currentWeight,
+        height: height,
+        bmi: bmi,
+        goalWeight: parseFloat(formData.goalWeight) || 0,
+        
+        // Goals and Preferences
+        goal: formData.goal,
+        timeframe: parseInt(formData.timeframe) || 12,
+        activityLevel: formData.activityLevel,
+        trackingPreference: formData.trackingPreference,
+        
+        // Calculated Metrics
+        bmr: bmr,
+        tdee: tdee,
+        dailyCalorieGoal: formData.goal === 'lose_weight' ? tdee - 500 : 
+                         formData.goal === 'gain_weight' ? tdee + 500 : tdee,
+        
+        // Subscription Status
+        premium: formData.premium,
+        
+        // Timestamps
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        
+        // Onboarding Status
+        onboardingCompleted: true,
+        onboardingCompletedAt: new Date()
+      }, { merge: true });
+      
+      console.log('User preferences saved to Firestore successfully');
+      
+      // Save onboarding completion status to AsyncStorage
+      await AsyncStorage.setItem('hasCompletedOnboarding', 'true');
+      
+      // Signal that onboarding is finished
+      onComplete();
+    } catch (error) {
+      console.error('Error saving user data:', error);
+      Alert.alert(
+        'Error',
+        'Failed to save your preferences. Please try again.',
+        [{ text: 'OK' }]
+      );
+    }
   };
 
   // Define the sequence of screens

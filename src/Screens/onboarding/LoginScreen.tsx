@@ -1,17 +1,56 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, TouchableWithoutFeedback } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../../hooks/useAuth';
 
 const LoginScreen = ({ onNext, onPrev, formData, updateFormData }) => {
   const [isLogin, setIsLogin] = useState(true);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const emailInputRef = useRef(null);
   const passwordInputRef = useRef(null);
+  const { signIn, signUp } = useAuth();
 
-  const handleSubmit = () => {
-    // Here you would handle Firebase authentication
-    // For now, just proceed to the next step
-    onNext();
+  const handleSubmit = async () => {
+    if (!formData.email || !formData.password) {
+      setError('Please enter both email and password');
+      return;
+    }
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      setError('Please enter a valid email address');
+      return;
+    }
+
+    // Basic password validation
+    if (formData.password.length < 6) {
+      setError('Password must be at least 6 characters long');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError('');
+      
+      if (isLogin) {
+        // Handle login
+        await signIn(formData.email, formData.password);
+        Alert.alert('Success', 'Logged in successfully!');
+        onNext();
+      } else {
+        // Handle signup
+        await signUp(formData.email, formData.password);
+        Alert.alert('Success', 'Account created successfully!');
+        onNext();
+      }
+    } catch (error: any) {
+      console.error('Authentication error:', error);
+      setError(error.message || 'Authentication failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleContainerPress = () => {
@@ -65,8 +104,16 @@ const LoginScreen = ({ onNext, onPrev, formData, updateFormData }) => {
 
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-          <TouchableOpacity style={styles.button} onPress={handleSubmit}>
-            <Text style={styles.buttonText}>{isLogin ? 'Log In' : 'Sign Up'}</Text>
+          <TouchableOpacity 
+            style={[styles.button, loading && styles.buttonDisabled]} 
+            onPress={handleSubmit}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="black" />
+            ) : (
+              <Text style={styles.buttonText}>{isLogin ? 'Log In' : 'Sign Up'}</Text>
+            )}
           </TouchableOpacity>
 
           <TouchableOpacity 
@@ -127,6 +174,9 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
     marginTop: 16,
+  },
+  buttonDisabled: {
+    opacity: 0.7,
   },
   buttonText: {
     fontSize: 18,

@@ -17,7 +17,8 @@
       "bundleIdentifier": "com.anonymous.SimpleApp",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
-      }
+      },
+      "googleServicesFile": "./GoogleService-Info.plist"
     },
     "android": {
       "adaptiveIcon": {
@@ -34,6 +35,9 @@
         "projectId": "83b6caf9-e23d-422c-97dd-4882c8a8c865"
       }
     },
-    "owner": "aanvil7"
+    "owner": "aanvil7",
+    "plugins": [
+      "@react-native-firebase/app"
+    ]
   }
 }
