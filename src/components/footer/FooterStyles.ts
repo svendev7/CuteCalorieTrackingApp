@@ -29,9 +29,4 @@ export const styles = StyleSheet.create({
       bottom: height * 0.065,
       zIndex: 101,
     },
-    popoutButton: {
-      position: 'absolute',
-      alignSelf: 'center',
-      bottom: height * 0.05,
-    },
   });

@@ -11,35 +11,39 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from './hooks/useAuth';
 import { db } from './config/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { CustomMealScreen } from './Screens/meals/CustomMealScreen';
+import AddMealLogScreen from './Screens/logging/AddMealLogScreen';
+import AddCustomFoodScreen from './Screens/logging/AddCustomFoodScreen';
+import CustomMealReviewScreen from './Screens/meals/CustomMealReviewScreen';
 import { SavedMealsScreen } from './Screens/meals/SavedMealsScreen';
-import { MealEditScreen } from './Screens/meals/MealEditScreen';
+import AddFoodOptionsScreen from './Screens/logging/AddFoodOptionsScreen';
 
 const { width, height } = Dimensions.get('window');
 
 export default function App() {
-    const [activeTab, setActiveTab] = useState('home');
+    const [activeScreen, setActiveScreen] = useState('home');
     const [isFooterVisible, setIsFooterVisible] = useState(true);
     const [customBackground, setCustomBackground] = useState(null);
     const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
-    const [showCustomMealScreen, setShowCustomMealScreen] = useState(false);
+    const [showAddMealLogScreen, setShowAddMealLogScreen] = useState(false);
+    const [showAddCustomFoodScreen, setShowAddCustomFoodScreen] = useState(false);
+    const [foodToEdit, setFoodToEdit] = useState<CustomFood | null>(null);
+    const [showCustomMealReviewScreen, setShowCustomMealReviewScreen] = useState(false);
     const [showSavedMealsScreen, setShowSavedMealsScreen] = useState(false);
-    const [showMealEditScreen, setShowMealEditScreen] = useState(false);
-    const [selectedMeal, setSelectedMeal] = useState(null);
+    const [showAddFoodOptionsScreen, setShowAddFoodOptionsScreen] = useState(false);
+    const [currentMealLogItems, setCurrentMealLogItems] = useState([]);
     const { user, loading: authLoading } = useAuth();
     
-    // Animation values
     const homeTranslate = useRef(new Animated.Value(0)).current;
     const settingsTranslate = useRef(new Animated.Value(width)).current;
-    const firebaseTranslate = useRef(new Animated.Value(width)).current;
+    const addMealTranslate = useRef(new Animated.Value(width)).current;
+    const rocketTranslate = useRef(new Animated.Value(width)).current;
+    const statsTranslate = useRef(new Animated.Value(width)).current;
 
-    // Check if user has completed onboarding
     useEffect(() => {
         const checkOnboardingStatus = async () => {
             try {
                 if (user) {
-                    // Check Firestore first
                     const userDoc = await getDoc(doc(db, 'users', user.uid));
                     if (userDoc.exists() && userDoc.data().onboardingCompleted) {
                         setHasCompletedOnboarding(true);
@@ -47,7 +51,6 @@ export default function App() {
                         setHasCompletedOnboarding(false);
                     }
                 } else {
-                    // If no user, they need to log in
                     setHasCompletedOnboarding(false);
                 }
             } catch (error) {
@@ -64,62 +67,30 @@ export default function App() {
     }, [user, authLoading]);
 
     useEffect(() => {
-        if (activeTab === 'settings') {
-            Animated.parallel([
-                Animated.timing(homeTranslate, {
-                    toValue: -width,
-                    duration: 300,
-                    useNativeDriver: true,
-                }),
-                Animated.timing(settingsTranslate, {
-                    toValue: 0,
-                    duration: 300,
-                    useNativeDriver: true,
-                }),
-                Animated.timing(firebaseTranslate, {
-                    toValue: width,
-                    duration: 300,
-                    useNativeDriver: true,
-                }),
-            ]).start();
-        } else if (activeTab === 'firebase') {
-            Animated.parallel([
-                Animated.timing(homeTranslate, {
-                    toValue: -width,
-                    duration: 300,
-                    useNativeDriver: true,
-                }),
-                Animated.timing(settingsTranslate, {
-                    toValue: width,
-                    duration: 300,
-                    useNativeDriver: true,
-                }),
-                Animated.timing(firebaseTranslate, {
-                    toValue: 0,
-                    duration: 300,
-                    useNativeDriver: true,
-                }),
-            ]).start();
-        } else {
-            Animated.parallel([
-                Animated.timing(homeTranslate, {
-                    toValue: 0,
-                    duration: 300,
-                    useNativeDriver: true,
-                }),
-                Animated.timing(settingsTranslate, {
-                    toValue: width,
-                    duration: 300,
-                    useNativeDriver: true,
-                }),
-                Animated.timing(firebaseTranslate, {
-                    toValue: width,
-                    duration: 300,
-                    useNativeDriver: true,
-                }),
-            ]).start();
-        }
-    }, [activeTab]);
+        const animations = [];
+        animations.push(Animated.timing(homeTranslate, {
+            toValue: activeScreen === 'home' ? 0 : -width,
+            duration: 300, useNativeDriver: true
+        }));
+        animations.push(Animated.timing(settingsTranslate, {
+            toValue: activeScreen === 'settings' ? 0 : width,
+            duration: 300, useNativeDriver: true
+        }));
+        animations.push(Animated.timing(addMealTranslate, {
+            toValue: activeScreen === 'addMeal' ? 0 : width,
+            duration: 300, useNativeDriver: true
+        }));
+        animations.push(Animated.timing(rocketTranslate, {
+            toValue: activeScreen === 'rocket' ? 0 : width,
+            duration: 300, useNativeDriver: true
+        }));
+        animations.push(Animated.timing(statsTranslate, {
+            toValue: activeScreen === 'stats' ? 0 : width,
+            duration: 300, useNativeDriver: true
+        }));
+
+        Animated.parallel(animations).start();
+    }, [activeScreen, homeTranslate, settingsTranslate, addMealTranslate, rocketTranslate, statsTranslate]);
 
     const updateCustomBackground = (uri) => {
         setCustomBackground(uri);
@@ -149,18 +120,55 @@ export default function App() {
         }
     };
 
-    // Handler functions for the screens opened from the footer
-    const handleOpenCustomMeal = () => {
-        setShowCustomMealScreen(true);
+    const navigateTo = (screen) => {
+        setActiveScreen(screen);
+        setIsFooterVisible(screen === 'home');
     };
 
-    const handleOpenSavedMeals = () => {
-        setShowSavedMealsScreen(true);
+    const handleOpenAddMealLog = () => {
+        navigateTo('addMeal');
     };
 
-    const handleSaveCustomMeal = (mealName, foods) => {
-        console.log("Saving custom meal:", mealName, foods);
-        setShowCustomMealScreen(false);
+    const handleOpenRocket = () => {
+        navigateTo('rocket');
+    };
+
+    const handleOpenStats = () => {
+        console.log("Stats button pressed - No target screen defined yet");
+    };
+
+    const handleOpenAddFoodOptions = () => {
+        setFoodToEdit(null);
+        setShowAddFoodOptionsScreen(true);
+    };
+
+    const handleCloseAddFoodOptions = () => {
+        setShowAddFoodOptionsScreen(false);
+    };
+
+    const handleOpenAddOrEditCustomFood = (food: CustomFood | null = null) => {
+        setFoodToEdit(food);
+        setShowAddFoodOptionsScreen(false);
+        setShowAddCustomFoodScreen(true);
+    };
+
+    const handleCloseAddCustomFood = () => {
+        setShowAddCustomFoodScreen(false);
+        setFoodToEdit(null);
+    };
+
+    const handleSaveOrUpdateCustomFood = (savedFood: CustomFood) => {
+        console.log("Saved/Updated food:", savedFood);
+        handleCloseAddCustomFood();
+    };
+
+    const handleOpenMealReview = (items) => {
+        setCurrentMealLogItems(items);
+        setShowCustomMealReviewScreen(true);
+    };
+
+    const handleCloseMealReview = () => {
+        setShowCustomMealReviewScreen(false);
     };
 
     const handleSelectSavedMeal = (meal) => {
@@ -168,18 +176,6 @@ export default function App() {
         setShowSavedMealsScreen(false);
     };
 
-    const handleEditMeal = (meal) => {
-        setSelectedMeal(meal);
-        setShowMealEditScreen(true);
-    };
-
-    const handleSaveMealEdit = (updatedMeal) => {
-        // Handle saving the updated meal
-        console.log("Saving updated meal:", updatedMeal);
-        setShowMealEditScreen(false);
-    };
-
-    // Show loading screen while checking auth and onboarding status
     if (isLoading || authLoading) {
         return (
             <View style={styles.loadingContainer}>
@@ -189,7 +185,6 @@ export default function App() {
         );
     }
 
-    // Show onboarding if not authenticated or not completed onboarding
     if (!user || !hasCompletedOnboarding) {
         return <OnboardingNavigator onComplete={completeOnboarding} />;
     }
@@ -198,80 +193,83 @@ export default function App() {
         <View style={styles.containerWrapper}>
             <View style={styles.overlay} />
             <View style={styles.contentContainer}>
-                <Animated.View 
-                    style={{ 
-                        flex: 1,
-                        transform: [{ translateX: homeTranslate }]
-                    }}
-                >
+                <Animated.View style={[styles.screenContainer, { transform: [{ translateX: homeTranslate }] }] }>
                     <HomeScreen 
                         onFooterVisibilityChange={setIsFooterVisible}
                         customBackground={customBackground}
-                        onSettingsPress={() => setActiveTab('settings')}
+                        onSettingsPress={() => navigateTo('settings')}
                     />
                 </Animated.View>
 
-                <Animated.View 
-                    style={{ 
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        transform: [{ translateX: settingsTranslate }]
-                    }}
-                >
+                <Animated.View style={[styles.screenContainer, { transform: [{ translateX: settingsTranslate }] }] }>
                     <SettingsScreen 
-                        navigate={(tab) => setActiveTab(tab)}
+                        navigate={navigateTo}
                         updateCustomBackground={updateCustomBackground}
                         customBackground={customBackground}
                     />
                 </Animated.View>
 
-                <Animated.View 
-                    style={{ 
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        transform: [{ translateX: firebaseTranslate }]
-                    }}
-                >
+                <Animated.View style={[styles.screenContainer, { transform: [{ translateX: addMealTranslate }] }] }>
+                    <AddMealLogScreen 
+                        navigation={{ 
+                            goBack: () => navigateTo('home'), 
+                            navigate: (screenName, params) => { 
+                                if (screenName === 'AddFoodOptions') handleOpenAddFoodOptions(); 
+                                if (screenName === 'CustomMealReview') handleOpenMealReview(params?.items || []);
+                                if (screenName === 'EditCustomFood') handleOpenAddOrEditCustomFood(params?.item); 
+                            }
+                        }} 
+                    />
+                </Animated.View>
+
+                <Animated.View style={[styles.screenContainer, { transform: [{ translateX: rocketTranslate }] }] }>
                     <FirebaseExample />
                 </Animated.View>
 
-                {activeTab === 'home' && (
-                    <Footer 
-                        isVisible={isFooterVisible} 
-                        onOpenCustomMeal={handleOpenCustomMeal}
-                        onOpenSavedMeals={handleOpenSavedMeals}
+                <Footer 
+                    isVisible={isFooterVisible} 
+                    onAddPress={handleOpenAddMealLog}
+                    onRocketPress={handleOpenRocket}
+                    onStatsPress={handleOpenStats}
+                />
+
+                {showAddFoodOptionsScreen && (
+                    <AddFoodOptionsScreen
+                        navigation={{
+                            goBack: handleCloseAddFoodOptions,
+                            navigate: (screenName) => {
+                                if (screenName === 'AddCustomFood') handleOpenAddOrEditCustomFood();
+                            }
+                        }}
                     />
                 )}
 
-                {/* Custom Meal Screen */}
-                {showCustomMealScreen && (
-                    <CustomMealScreen 
-                        onClose={() => setShowCustomMealScreen(false)} 
-                        onSave={handleSaveCustomMeal} 
+                {showAddCustomFoodScreen && (
+                    <AddCustomFoodScreen 
+                        navigation={{ 
+                            goBack: handleCloseAddCustomFood,
+                            save: handleSaveOrUpdateCustomFood 
+                        }} 
+                        route={{ params: { foodToEdit: foodToEdit } }}
                     />
                 )}
 
-                {/* Saved Meals Screen */}
+                {showCustomMealReviewScreen && (
+                    <CustomMealReviewScreen 
+                        navigation={{ 
+                            goBack: handleCloseMealReview, 
+                            navigate: (screenName, params) => {
+                                if (screenName === 'EditCustomFood') handleOpenAddOrEditCustomFood(params?.item);
+                            }
+                        }} 
+                        route={{ params: { foods: currentMealLogItems } }} 
+                    />
+                )}
+
                 {showSavedMealsScreen && (
                     <SavedMealsScreen 
                         onClose={() => setShowSavedMealsScreen(false)} 
                         onSelectMeal={handleSelectSavedMeal} 
-                    />
-                )}
-
-                {/* Meal Edit Screen */}
-                {showMealEditScreen && selectedMeal && (
-                    <MealEditScreen 
-                        meal={selectedMeal}
-                        onClose={() => setShowMealEditScreen(false)}
-                        onSave={handleSaveMealEdit}
-                        visible={showMealEditScreen}
                     />
                 )}
             </View>
@@ -302,4 +300,26 @@ const styles = StyleSheet.create({
         fontSize: 18,
         marginTop: 10,
     },
+    screenContainer: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: '#000',
+    },
 });
+
+interface CustomFood { 
+  id?: string; 
+  mealName: string;
+  protein: number;
+  carbs: number;
+  fat: number;
+  calories: number;
+  sugar: number;
+  fibers: number;
+  sodium: number;
+  imageUrl?: string;
+  isFavorite: boolean;
+}
