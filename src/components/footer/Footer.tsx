@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity, Animated, Dimensions } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Animated, Dimensions, Text } from 'react-native';
 import Union from '@assets/Union.svg';
 import Plus from '@assets/Plus.svg';
 import Rocket from '@assets/Rocket.svg';
@@ -9,7 +9,16 @@ import Scan from '@assets/Scan.svg';
 import Custom from '@assets/Custom.svg';
 import { styles } from './FooterStyles';
 const { width, height } = Dimensions.get('window');
-const Footer = ({ isVisible }) => {
+
+// Interface for Footer props
+interface FooterProps {
+  isVisible: boolean;
+  onOpenCustomMeal?: () => void;
+  onOpenSavedMeals?: () => void;
+  onOpenScanQR?: () => void;
+}
+
+const Footer = ({ isVisible, onOpenCustomMeal, onOpenSavedMeals, onOpenScanQR }: FooterProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const MealAnim = useRef(new Animated.Value(0)).current;
@@ -49,6 +58,27 @@ const Footer = ({ isVisible }) => {
     ]).start();
     
     setIsExpanded(!isExpanded);
+  };
+
+  const handleMealPress = () => {
+    if (onOpenSavedMeals) {
+      onOpenSavedMeals();
+    }
+    toggleMenu();
+  };
+
+  const handleScanPress = () => {
+    if (onOpenScanQR) {
+      onOpenScanQR();
+    }
+    toggleMenu();
+  };
+
+  const handleCustomPress = () => {
+    if (onOpenCustomMeal) {
+      onOpenCustomMeal();
+    }
+    toggleMenu();
   };
 
   const rotation = rotateAnim.interpolate({
@@ -110,8 +140,9 @@ const Footer = ({ isVisible }) => {
         transform: [{ translateY: button1Y }],
         opacity 
       }]}>
-        <TouchableOpacity onPress={() => console.log('Button 1 pressed')}>
+        <TouchableOpacity onPress={handleMealPress}>
           <Meal width={width * 0.15} height={width * 0.15} />
+          <Text style={{ color: '#FFFFFF', fontSize: 10, textAlign: 'center', marginTop: 2 }}>Saved</Text>
         </TouchableOpacity>
       </Animated.View>
 
@@ -119,8 +150,9 @@ const Footer = ({ isVisible }) => {
         transform: [{ translateY: button2Y }, { translateX: button1X }],
         opacity 
       }]}>
-        <TouchableOpacity onPress={() => console.log('Button 2 pressed')}>
+        <TouchableOpacity onPress={handleScanPress}>
           <Scan width={width * 0.15} height={width * 0.15} />
+          <Text style={{ color: '#FFFFFF', fontSize: 10, textAlign: 'center', marginTop: 2 }}>Scan QR</Text>
         </TouchableOpacity>
       </Animated.View>
 
@@ -128,8 +160,9 @@ const Footer = ({ isVisible }) => {
         transform: [{ translateY: button3Y }, { translateX: button3X }],
         opacity 
       }]}>
-        <TouchableOpacity onPress={() => console.log('Button 3 pressed')}>
+        <TouchableOpacity onPress={handleCustomPress}>
           <Custom width={width * 0.15} height={width * 0.15} />
+          <Text style={{ color: '#FFFFFF', fontSize: 10, textAlign: 'center', marginTop: 2 }}>Custom</Text>
         </TouchableOpacity>
       </Animated.View>
 
@@ -147,6 +180,5 @@ const Footer = ({ isVisible }) => {
     </Animated.View>
   );
 };
-
 
 export default Footer;

@@ -11,6 +11,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from './hooks/useAuth';
 import { db } from './config/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { CustomMealScreen } from './Screens/meals/CustomMealScreen';
+import { SavedMealsScreen } from './Screens/meals/SavedMealsScreen';
+import { MealEditScreen } from './Screens/meals/MealEditScreen';
 
 const { width, height } = Dimensions.get('window');
 
@@ -20,6 +23,10 @@ export default function App() {
     const [customBackground, setCustomBackground] = useState(null);
     const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [showCustomMealScreen, setShowCustomMealScreen] = useState(false);
+    const [showSavedMealsScreen, setShowSavedMealsScreen] = useState(false);
+    const [showMealEditScreen, setShowMealEditScreen] = useState(false);
+    const [selectedMeal, setSelectedMeal] = useState(null);
     const { user, loading: authLoading } = useAuth();
     
     // Animation values
@@ -142,6 +149,36 @@ export default function App() {
         }
     };
 
+    // Handler functions for the screens opened from the footer
+    const handleOpenCustomMeal = () => {
+        setShowCustomMealScreen(true);
+    };
+
+    const handleOpenSavedMeals = () => {
+        setShowSavedMealsScreen(true);
+    };
+
+    const handleSaveCustomMeal = (mealName, foods) => {
+        console.log("Saving custom meal:", mealName, foods);
+        setShowCustomMealScreen(false);
+    };
+
+    const handleSelectSavedMeal = (meal) => {
+        console.log("Selected saved meal:", meal);
+        setShowSavedMealsScreen(false);
+    };
+
+    const handleEditMeal = (meal) => {
+        setSelectedMeal(meal);
+        setShowMealEditScreen(true);
+    };
+
+    const handleSaveMealEdit = (updatedMeal) => {
+        // Handle saving the updated meal
+        console.log("Saving updated meal:", updatedMeal);
+        setShowMealEditScreen(false);
+    };
+
     // Show loading screen while checking auth and onboarding status
     if (isLoading || authLoading) {
         return (
@@ -205,7 +242,37 @@ export default function App() {
                 </Animated.View>
 
                 {activeTab === 'home' && (
-                    <Footer isVisible={isFooterVisible} />
+                    <Footer 
+                        isVisible={isFooterVisible} 
+                        onOpenCustomMeal={handleOpenCustomMeal}
+                        onOpenSavedMeals={handleOpenSavedMeals}
+                    />
+                )}
+
+                {/* Custom Meal Screen */}
+                {showCustomMealScreen && (
+                    <CustomMealScreen 
+                        onClose={() => setShowCustomMealScreen(false)} 
+                        onSave={handleSaveCustomMeal} 
+                    />
+                )}
+
+                {/* Saved Meals Screen */}
+                {showSavedMealsScreen && (
+                    <SavedMealsScreen 
+                        onClose={() => setShowSavedMealsScreen(false)} 
+                        onSelectMeal={handleSelectSavedMeal} 
+                    />
+                )}
+
+                {/* Meal Edit Screen */}
+                {showMealEditScreen && selectedMeal && (
+                    <MealEditScreen 
+                        meal={selectedMeal}
+                        onClose={() => setShowMealEditScreen(false)}
+                        onSave={handleSaveMealEdit}
+                        visible={showMealEditScreen}
+                    />
                 )}
             </View>
         </View>

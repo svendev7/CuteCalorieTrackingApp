@@ -23,3 +23,15 @@ tic tac toe
 steen papier schaar
 doodle jump
 higher lower?
+
+button boven the top container met calorieen om te switchen van jouw overzicht naar die van je steen, dan zie je zijn hartjes, speel level, eten level etc
+en dan bij elke meal die je logged krijg je eten ofzo die je dan aan je pet kan geven, en op dit andere scherm kan je hem dan ook schoonmaken ofzo net als pou
+
+Voor de footer button, ipv 3 buttons zoals nu moet het gewoon een button zijn die een screen opent waar je een log invoert, onderaan een save knop en dan bovenin 2 knoppen naast elkaar: 
+Scan Meals, Foods (check yazio)
+Bij de tab Meals daar onder een search bar om te zoeken tussen alle meals en daaronder dan 3 sub tabs: Recent, Created, Favorites
+Bij Foods hetzelfde, (food is dus origineel leeg, dan maak je een nieuwe food aan door de add food knop (dus niet create food) deze stuurt je naar een pagina waar je 3 keuzes hebt, food database, qr scan, custom food) deze kan je dan favoriten en dan loggen (favorite knop links onder, recht onder 90% van footer is save knop)
+dan save je dus een nieuwe food en die staat tussen de foods tab, zelfde werkt t een beetje met meals alleen bij meals kan je alleen een custom meal maken die bestaat uit foods, custom foods / qr scan food database of saved foods om die te populaten
+bij die foods en meals zie je dan de values en die kan je in je mandje doen zeg maar en als je op done drukt log je dit als meal (die animate dan naar je mealviewer)
+bij links boven (je winkelmand zeg maar) als je daar op klikt kom je bij de create meal screen, dit is dus wat je gaat loggen deze kan je dan loggen en opslaan of alleen loggen en dan heb je knop met blijf eten toe voegen of je kan eten verwijderen uit je winkelmand, deze opgeslagen staan dan tussen Meals
+Look at Group 45.png for sketch
