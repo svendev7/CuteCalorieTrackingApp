@@ -4,17 +4,17 @@ const { width, height } = Dimensions.get('window');
 
 const colors = {
   background: '#000000',    
-  text: '#EDEDED',             
+  text: '#FFFFFF',             
   secondary: '#A0A0A0',        
-  subtleText: '#EEEEEE',       
+  subtleText: '#FFFFFF',       
   handleBar: '#8E8E8E',        
-  cardBackground: '#0A0A0A',   
+  cardBackground: '#1C1C1E',   
   cardBorder: '#2E2E2E',
-  backgroundShape: '#0A0A0A', 
+  backgroundShape: '#1A1A1A', 
   backgroundOpacity: 0.8, 
-  protein: '#D93036',          
-  carbs: '#45A557',            
-  fat: '#FFB224',             
+  protein: '#EF476F',          
+  carbs: '#06D6A0',            
+  fat: '#FFD166',             
 };
 
 export const styles = StyleSheet.create({
@@ -232,15 +232,15 @@ export const styles = StyleSheet.create({
   },
   proteinBar: {
     backgroundColor: colors.protein,
-    opacity: 0.8,
+    opacity: 0.9,
   },
   carbsBar: {
     backgroundColor: colors.carbs,
-    opacity: 0.8,
+    opacity: 0.9,
   },
   fatBar: {
     backgroundColor: colors.fat,
-    opacity: 0.8,
+    opacity: 0.9,
   },
   macroLabel: {
     color: colors.text,
@@ -318,7 +318,7 @@ export const styles = StyleSheet.create({
     marginBottom: 15,
   },
   dateText: {
-    color: "#FFFFFF",
+    color: colors.text,
     fontSize: 16,
     fontWeight: "500",
   },
@@ -330,34 +330,32 @@ export const styles = StyleSheet.create({
     marginBottom: -9,
   },
   loadPreviousDayButton: {
-    backgroundColor: colors.cardBackground, // Or a different subtle color
-    borderColor: colors.cardBorder, // Match card border
+    backgroundColor: colors.backgroundShape, 
+    borderColor: colors.cardBorder,
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: 8,
     paddingVertical: 15,
     paddingHorizontal: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 15, // Space above the button
-    marginBottom: 10, // Space below the button
-    marginHorizontal: 5, // Align with card margins slightly
-    width: '98%', // Make it almost full width
+    marginTop: 15,
+    marginBottom: 10,
+    marginHorizontal: 5,
+    width: '98%',
     alignSelf: 'center',
   },
   loadPreviousDayButtonText: {
-    color: colors.text, // White or light grey text
+    color: colors.text,
     fontSize: 16,
-    fontWeight: '500',
-    fontFamily: 'Geist Sans', // Use your app's font
+    fontWeight: '600',
   },
   noMealsText: {
-      color: colors.secondary, // Use a subtle grey color
+      color: colors.secondary,
       fontSize: 14,
       textAlign: 'center',
       marginTop: 10,
       marginBottom: 10,
-      paddingHorizontal: 20, // Add padding if needed
-      fontFamily: 'Geist Sans',
+      paddingHorizontal: 20,
   }
 });
 

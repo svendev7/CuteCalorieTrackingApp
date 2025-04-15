@@ -1,5 +1,17 @@
 import { StyleSheet, Dimensions } from 'react-native';
 const { width, height } = Dimensions.get('window');
+
+// Define colors to match AddMealLogScreen
+const colors = {
+  text: '#FFFFFF',             
+  secondary: '#A0A0A0',
+  cardBackground: '#1C1C1E',
+  separator: 'rgba(120, 120, 120, 0.2)',
+  protein: '#EF476F',
+  carbs: '#06D6A0',
+  fat: '#FFD166',
+};
+
 export const styles = StyleSheet.create({
     container: {
       flexDirection: "row",
@@ -8,7 +20,7 @@ export const styles = StyleSheet.create({
       paddingVertical: 12,
       paddingHorizontal: 5,
       borderBottomWidth: 1,
-      borderBottomColor: "rgba(120, 120, 120, 0.2)",
+      borderBottomColor: colors.separator,
       width: "105%",
     },
     leftSection: {
@@ -31,13 +43,13 @@ export const styles = StyleSheet.create({
       maxWidth: width * 0.48,
     },
     mealName: {
-      color: "#EDEDED",
+      color: colors.text,
       fontSize: 15,
       fontWeight: "600",
       marginBottom: 4,
     },
     macroText: {
-      color: "#A1A1A1",
+      color: colors.secondary,
       fontSize: 11,
       marginBottom: 4,
     },
@@ -46,23 +58,22 @@ export const styles = StyleSheet.create({
       alignItems: "center",
     },
     timeText: {
-      color: "#A1A1A1",
+      color: colors.secondary,
       fontSize: 12,
       marginLeft: 2,
-      
     },
     calorieContainer: {
       alignItems: "center",
     },
     calorieValue: {
-      color: "#EDEDED",
+      color: "#45A557", // Green color for calories to match AddMealLogScreen
       fontSize: 20,
       fontWeight: "bold"
     },
     calorieLabel: {
-      color: "#A0A0A0",
+      color: colors.secondary,
       fontSize: 12,
     },
-  })
+});
   
   

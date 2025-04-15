@@ -4,17 +4,17 @@ const { width, height } = Dimensions.get('window');
 
 const colors = {
   background: '#000000',    
-  text: '#EDEDED',             
+  text: '#FFFFFF',             
   secondary: '#A0A0A0',        
-  subtleText: '#EEEEEE',       
+  subtleText: '#FFFFFF',       
   handleBar: '#8E8E8E',        
-  cardBackground: '#0A0A0A',   
+  cardBackground: '#1C1C1E',   
   cardBorder: '#2E2E2E',
-  backgroundShape: '#0A0A0A', 
+  backgroundShape: '#0A0A0A',
   backgroundOpacity: 0.8, 
-  protein: '#D93036',          
-  carbs: '#45A557',            
-  fat: '#FFB224',             
+  protein: '#EF476F',          
+  carbs: '#06D6A0',            
+  fat: '#FFD166',             
 };
 
 export const styles = StyleSheet.create({
@@ -23,7 +23,7 @@ export const styles = StyleSheet.create({
     marginTop: 60,
   },
   imgBackground:{
-    backgroundColor: '#0A0A0A',
+    backgroundColor: colors.backgroundShape,
   },
   container: {
     flex: 1,
@@ -252,15 +252,15 @@ export const styles = StyleSheet.create({
   },
   proteinBar: {
     backgroundColor: colors.protein,
-    opacity: 0.8,
+    opacity: 0.9,
   },
   carbsBar: {
     backgroundColor: colors.carbs,
-    opacity: 0.8,
+    opacity: 0.9,
   },
   fatBar: {
     backgroundColor: colors.fat,
-    opacity: 0.8,
+    opacity: 0.9,
   },
   macroLabel: {
     color: colors.text,
@@ -345,7 +345,7 @@ export const styles = StyleSheet.create({
   separator: {
     height: 1,
     backgroundColor: "rgba(120, 120, 120, 0.2)",
-    marginHorizontal: -5,
+    marginHorizontal: -6,
     marginLeft: -8,
     marginBottom: -9,
   },
@@ -361,7 +361,7 @@ export const styles = StyleSheet.create({
     marginTop: 20, // Space above the button
     marginBottom: 10, // Space below the button
     marginHorizontal: 5, // Align with card margins slightly
-    width: '98%', // Make it almost full width
+    width: '100%', // Make it almost full width
     alignSelf: 'center',
   },
   loadPreviousDayButtonText: {
