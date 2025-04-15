@@ -1,0 +1,25 @@
+Play games with pebbly (start with 3 base games, add 6 unlockable games for tokens, and a bunch of premium only games)
+Level up Pebbly for tokens and customization rewards
+cosmetics for pebbly, think hats, different colored pebbly.
+Streaks give rewards every week or day in tokens and weekly or monthly rewards gives pebbly skins or hats
+Logging a meal gives pebbly animation where he eats
+tapping on pebbly gives u a stats screen of him where on top his name and hearts and he has an energy bar that u need to fill based on your calorie plan (so not logging means he starves)
+also have to shower/clean pebbly
+in onboarding add option if user wants to track water or fasting times (can also later be changed in settings)
+this will then add two buttons top left and top right of top container in scrollview with respectively the water and fasting timers that if u tap on them bring u to a screen where u can initiate the fast or u can log your water
+in the three options add the bottom, when logging a food u can also choose from a database of existing foods along with inputting your own custom food, then in the meals section u can also choose between existing meals or creating a custom meal, this is a meal that u can have 1 to many foods in and then u log it as 1 meal, or u can log 1 "food" as 1 meal, this meal u save and can then choose in the meal saving button to use
+integration with apple health for step counter (also an option in onboarding for this to show in top container)
+integration with apple widgets
+Allow premium users to customize every single component (late goal tho, this isnt necessary for release as it might take a whileeeeee, like changing color of every button and text etc.)
+
+after release use for ~2 weeks to find bugs and stuff to add and make marketing videos in that time to release on tiktok, insta, youtube, facebook and spend around 150 euros per platform for those ads and hope for big cash!
+
+For games:
+
+die stacking game met aflopende size in circles die je op 3 van die palen moet stoppen
+flappy bird
+3 bekers en dan balletje vinden
+tic tac toe
+steen papier schaar
+doodle jump
+higher lower?
