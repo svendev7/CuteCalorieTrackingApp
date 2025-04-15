@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Dimensions, SafeAreaView, Platform, Animated, PanResponder } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Dimensions, SafeAreaView, Platform, Alert, Modal, Animated, TouchableWithoutFeedback, Keyboard } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'; // Using Ionicons for cart
-import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 
 const { width, height } = Dimensions.get('window');
 
@@ -13,18 +12,23 @@ interface FoodItem {
   carbs: number;
   fat: number;
   calories: number;
+  sodium?: number;
+  sugar?: number;
+  fibers?: number;
   type: 'Recent' | 'Created' | 'Favorites';
-  amount?: number;
-  unit?: string;
 }
 
 interface MealItem {
   id: string;
   name: string;
   calories: number;
-  type: 'Recent' | 'Created' | 'Favorites'; // Added type for meals
-  amount?: number;
-  unit?: string;
+  protein: number;
+  carbs: number;
+  fat: number;
+  sodium?: number;
+  sugar?: number;
+  fibers?: number;
+  type: 'Recent' | 'Created' | 'Favorites';
 }
 
 interface AddMealLogScreenProps {
@@ -38,61 +42,249 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
   const [cartCount, setCartCount] = useState(0); // Example cart count
   const [currentMealItems, setCurrentMealItems] = useState<(FoodItem | MealItem)[]>([]); // State to hold added items
   const [selectedItems, setSelectedItems] = useState<any[]>([]);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedFood, setSelectedFood] = useState<FoodItem | MealItem | null>(null);
+  const [quantity, setQuantity] = useState('100');
+  const [unit, setUnit] = useState('g');
+  const modalOffset = useRef(new Animated.Value(0)).current;
+  const tabIndicatorPosition = useRef(new Animated.Value(0)).current;
+  const filterIndicatorPosition = useRef(new Animated.Value(0)).current;
+
+  // Set up keyboard listeners
+  useEffect(() => {
+    const keyboardWillShow = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      () => {
+        Animated.timing(modalOffset, {
+          toValue: -100,
+          duration: 300,
+          useNativeDriver: true,
+        }).start();
+      }
+    );
+
+    const keyboardWillHide = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => {
+        Animated.timing(modalOffset, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }).start();
+      }
+    );
+
+    return () => {
+      keyboardWillShow.remove();
+      keyboardWillHide.remove();
+    };
+  }, []);
 
   // Dummy data - replace with actual data fetching later
   const foodItems: FoodItem[] = [
-    { id: '1', name: "Potato's & Chicken &..", protein: 20, carbs: 44, fat: 12, calories: 500, type: 'Created', amount: 1, unit: 'serving' },
-    { id: '2', name: 'Grilled Salmon', protein: 32, carbs: 15, fat: 18, calories: 380, type: 'Recent', amount: 1, unit: 'serving' },
+    { id: '1', name: "Potato's & Chicken &..", protein: 20, carbs: 44, fat: 12, calories: 500, sodium: 400, sugar: 5, fibers: 3, type: 'Created' },
+    { id: '2', name: 'Grilled Salmon', protein: 32, carbs: 15, fat: 18, calories: 380, sodium: 120, sugar: 0, fibers: 0, type: 'Recent' },
     // Add more dummy items
   ];
   const mealItems: MealItem[] = [
-    { id: 'm1', name: 'Breakfast Burrito', calories: 600, type: 'Recent', amount: 1, unit: 'serving' },
-    { id: 'm2', name: 'Protein Lunch', calories: 750, type: 'Created', amount: 1, unit: 'serving' },
-    { id: 'm3', name: 'Healthy Dinner', calories: 550, type: 'Favorites', amount: 1, unit: 'serving' },
+    { id: 'm1', name: 'Breakfast Burrito', calories: 600, protein: 25, carbs: 60, fat: 30, sodium: 800, sugar: 10, fibers: 5, type: 'Recent' },
+    { id: 'm2', name: 'Protein Lunch', calories: 750, protein: 40, carbs: 50, fat: 25, sodium: 600, sugar: 5, fibers: 8, type: 'Created' },
+    { id: 'm3', name: 'Healthy Dinner', calories: 550, protein: 35, carbs: 40, fat: 20, sodium: 350, sugar: 2, fibers: 10, type: 'Favorites' },
     // Add more dummy meals
   ];
 
   const handleTabPress = (tabName: string) => {
+    // Animate tab indicator
+    Animated.spring(tabIndicatorPosition, {
+      toValue: tabName === 'Foods' ? 0 : 1,
+      friction: 20, // Higher friction = less bouncy
+      tension: 100, // Lower tension = slower
+      useNativeDriver: false,
+    }).start();
+    
     setActiveTab(tabName);
     // Reset filter to Recent when switching tabs
     setActiveFilter('Recent');
+    // Reset filter indicator position
+    Animated.spring(filterIndicatorPosition, {
+      toValue: 0, // 'Recent' is at position 0
+      friction: 20,
+      tension: 100,
+      useNativeDriver: false,
+    }).start();
   };
 
   const handleFilterPress = (filterName: string) => {
+    // Calculate position based on filter index
+    const filterIndex = ['Recent', 'Created', 'Favorites'].indexOf(filterName);
+    
+    // Animate filter indicator
+    Animated.spring(filterIndicatorPosition, {
+      toValue: filterIndex,
+      friction: 20,
+      tension: 100,
+      useNativeDriver: false,
+    }).start();
+    
     setActiveFilter(filterName);
   };
 
-  const handleAddItemToMeal = (item: FoodItem | MealItem) => {
-    console.log('Adding:', item.name);
-    // Ensure the item has amount and unit properties
-    const itemToAdd = {
+  const handleAddItemToMeal = (item: FoodItem | MealItem, selectedQuantity: string = '100', selectedUnit: string = 'g') => {
+    console.log('Adding:', item.name, selectedQuantity, selectedUnit);
+    // Ensure item has all required fields for Food interface in CustomMealReviewScreen
+    const enhancedItem = {
       ...item,
-      amount: item.amount || 1,
-      unit: item.unit || 'serving'
+      // Add default values for any missing properties needed in CustomMealReviewScreen
+      amount: parseFloat(selectedQuantity) || 100,
+      unit: selectedUnit || 'g',
     };
-    setCurrentMealItems(prev => [...prev, itemToAdd]);
-    setSelectedItems(prev => [...prev, itemToAdd]);
+    setCurrentMealItems(prev => [...prev, enhancedItem]); // Add to internal state
+    setSelectedItems(prev => [...prev, enhancedItem]); // Also add to selected items for continue button
     setCartCount(prev => prev + 1);
   };
 
-  const handleDeleteItem = (id: string) => {
-    const updatedItems = currentMealItems.filter(item => item.id !== id);
-    const updatedSelectedItems = selectedItems.filter(item => item.id !== id);
-    
-    setCurrentMealItems(updatedItems);
-    setSelectedItems(updatedSelectedItems);
-    setCartCount(updatedItems.length);
+  const handleEditItem = (item: FoodItem | MealItem) => {
+    console.log('Editing:', item.name);
+    // Navigate to edit screen or show modal
+    // Ensure item is a FoodItem before trying to edit (Meals might not be editable this way)
+    if ('protein' in item) { // Simple check if it's a FoodItem
+      navigation.navigate('EditCustomFood', { item }); // Use the new navigation target
+    } else {
+      console.log("Cannot edit Meal items from this screen.");
+    }
   };
 
-  const renderRightActions = (id: string) => {
+  const handleFoodPress = (item: FoodItem | MealItem) => {
+    setSelectedFood(item);
+    // Reset quantity and unit to default values each time
+    setQuantity('100');
+    setUnit('g');
+    setModalVisible(true);
+  };
+
+  const renderQuantityModal = () => {
+    if (!selectedFood) return null;
+    
+    // Calculate macro values based on current quantity input
+    const baseAmount = 100; // Base amount (typically 100g)
+    const ratio = parseFloat(quantity) / baseAmount || 0;
+    
+    const calculatedMacros = {
+      protein: Math.round((selectedFood.protein * ratio) * 10) / 10,
+      carbs: Math.round((selectedFood.carbs * ratio) * 10) / 10,
+      fat: Math.round((selectedFood.fat * ratio) * 10) / 10,
+      calories: Math.round(selectedFood.calories * ratio),
+      sodium: Math.round((selectedFood.sodium || 0) * ratio),
+      sugar: Math.round((selectedFood.sugar || 0) * ratio * 10) / 10,
+      fibers: Math.round((selectedFood.fibers || 0) * ratio * 10) / 10
+    };
+    
     return (
-      <TouchableOpacity
-        style={styles.deleteAction}
-        onPress={() => handleDeleteItem(id)}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}
       >
-        <MaterialCommunityIcons name="delete-outline" size={24} color="#FFFFFF" />
-        <Text style={styles.deleteActionText}>Delete</Text>
-      </TouchableOpacity>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={styles.modalOverlay}>
+            <Animated.View 
+              style={[
+                styles.modalContent, 
+                {transform: [{translateY: modalOffset}]}
+              ]}
+            >
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Set Quantity</Text>
+                <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.closeButton}>
+                  <Ionicons name="close" size={24} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+              
+              <Text style={styles.foodTitleInModal}>{selectedFood.name}</Text>
+              
+              {/* Dynamic Macro Display */}
+              <View style={styles.dynamicMacrosContainer}>
+                <View style={styles.calorieRow}>
+                  <Text style={styles.dynamicCalorieValue}>{calculatedMacros.calories}</Text>
+                  <Text style={styles.dynamicCalorieLabel}>Calories</Text>
+                </View>
+                
+                <View style={styles.dynamicMacrosRow}>
+                  <View style={styles.dynamicMacroItem}>
+                    <Text style={[styles.dynamicMacroValue, styles.proteinColor]}>{calculatedMacros.protein}g</Text>
+                    <Text style={styles.dynamicMacroLabel}>Protein</Text>
+                  </View>
+                  
+                  <View style={styles.dynamicMacroItem}>
+                    <Text style={[styles.dynamicMacroValue, styles.carbsColor]}>{calculatedMacros.carbs}g</Text>
+                    <Text style={styles.dynamicMacroLabel}>Carbs</Text>
+                  </View>
+                  
+                  <View style={styles.dynamicMacroItem}>
+                    <Text style={[styles.dynamicMacroValue, styles.fatColor]}>{calculatedMacros.fat}g</Text>
+                    <Text style={styles.dynamicMacroLabel}>Fat</Text>
+                  </View>
+                </View>
+                
+                <View style={styles.dynamicMacrosRow}>
+                  <View style={styles.dynamicMacroItem}>
+                    <Text style={[styles.dynamicMacroValue, styles.sodiumColor]}>{calculatedMacros.sodium}mg</Text>
+                    <Text style={styles.dynamicMacroLabel}>Sodium</Text>
+                  </View>
+                  
+                  <View style={styles.dynamicMacroItem}>
+                    <Text style={[styles.dynamicMacroValue, styles.sugarColor]}>{calculatedMacros.sugar}g</Text>
+                    <Text style={styles.dynamicMacroLabel}>Sugar</Text>
+                  </View>
+                  
+                  <View style={styles.dynamicMacroItem}>
+                    <Text style={[styles.dynamicMacroValue, styles.fiberColor]}>{calculatedMacros.fibers}g</Text>
+                    <Text style={styles.dynamicMacroLabel}>Fiber</Text>
+                  </View>
+                </View>
+              </View>
+              
+              <Text style={styles.modalSubtitle}>Set quantity:</Text>
+              
+              <View style={styles.quantityInputContainer}>
+                <TextInput
+                  style={styles.quantityInput}
+                  keyboardType="numeric"
+                  value={quantity}
+                  onChangeText={setQuantity}
+                  placeholder="100"
+                  placeholderTextColor="#666666"
+                />
+                
+                <View style={styles.unitSelector}>
+                  {['g', 'ml', 'oz', 'lb'].map(unitOption => (
+                    <TouchableOpacity 
+                      key={unitOption}
+                      style={[styles.unitOption, unit === unitOption && styles.selectedUnit]}
+                      onPress={() => setUnit(unitOption)}
+                    >
+                      <Text style={[styles.unitText, unit === unitOption && styles.selectedUnitText]}>
+                        {unitOption}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+              
+              <TouchableOpacity 
+                style={styles.addToMealButton}
+                onPress={() => {
+                  handleAddItemToMeal(selectedFood, quantity, unit);
+                  setModalVisible(false);
+                }}
+              >
+                <Text style={styles.addToMealButtonText}>Add to Meal</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     );
   };
 
@@ -104,35 +296,129 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
       return nameMatch && typeMatch;
     });
 
-    return filteredItems.map((item) => (
-      <Swipeable
-        key={item.id}
-        renderRightActions={() => renderRightActions(item.id)}
-      >
-        <View style={styles.listItem}>
+    return filteredItems.map((item) => {
+      const handleDeletePress = () => {
+        Alert.alert(
+          "Delete Item",
+          `Are you sure you want to delete ${item.name}?`,
+          [
+            { text: "Cancel", style: "cancel" },
+            { 
+              text: "Delete", 
+              style: "destructive",
+              onPress: () => console.log('Deleted:', item.name)
+            }
+          ]
+        );
+      };
+
+      return (
+        <View key={item.id} style={styles.listItem}>
           <View style={styles.itemImagePlaceholder} />
           <View style={styles.itemDetails}>
-            <Text style={styles.itemName}>{item.name}</Text>
-            {/* Type check to display macros only for FoodItem */}
-            {activeTab === 'Foods' && 'protein' in item && 'carbs' in item && 'fat' in item && (
-              <Text style={styles.itemMacros}>
-                {/* Use type inference from checks above */} 
-                {item.protein}g Protein &bull; {item.carbs}g Carbs &bull; {item.fat}g Fat
-              </Text>
-            )}
-            <Text style={styles.itemCaloriesValue}>{item.calories} Cal</Text>
+            <Text style={styles.itemName} numberOfLines={1} ellipsizeMode="tail">{item.name}</Text>
+            <View style={styles.macroWrapper}>
+              <View style={styles.macrosGrid}>
+                <View style={styles.macrosColumn}>
+                  <View style={styles.macroRow}>
+                    <View style={[styles.macroDot, { backgroundColor: '#EF476F' }]} />
+                    <Text style={styles.macroText}>
+                      <Text style={styles.macroValue}>{item.protein}g</Text>
+                      <Text style={styles.macroLabel}>  Protein</Text>
+                    </Text>
+                  </View>
+                  <View style={styles.macroRow}>
+                    <View style={[styles.macroDot, { backgroundColor: '#06D6A0' }]} />
+                    <Text style={styles.macroText}>
+                      <Text style={styles.macroValue}>{item.carbs}g</Text>
+                      <Text style={styles.macroLabel}>  Carbs</Text>
+                    </Text>
+                  </View>
+                  <View style={styles.macroRow}>
+                    <View style={[styles.macroDot, { backgroundColor: '#FFD166' }]} />
+                    <Text style={styles.macroText}>
+                      <Text style={styles.macroValue}>{item.fat}g</Text>
+                      <Text style={styles.macroLabel}>  Fat</Text>
+                    </Text>
+                  </View>
+                </View>
+                
+                <View style={styles.macrosColumn}>
+                  <View style={styles.macroRow}>
+                    <View style={[styles.macroDot, { backgroundColor: '#FF9500' }]} />
+                    <Text style={styles.macroText}>
+                      <Text style={styles.macroValue}>{item.sodium || 0}mg</Text>
+                      <Text style={styles.macroLabel}>  Sodium</Text>
+                    </Text>
+                  </View>
+                  <View style={styles.macroRow}>
+                    <View style={[styles.macroDot, { backgroundColor: '#D4C19C' }]} />
+                    <Text style={styles.macroText}>
+                      <Text style={styles.macroValue}>{item.sugar || 0}g</Text>
+                      <Text style={styles.macroLabel}>  Sugar</Text>
+                    </Text>
+                  </View>
+                  <View style={styles.macroRow}>
+                    <View style={[styles.macroDot, { backgroundColor: '#5AC8FA' }]} />
+                    <Text style={styles.macroText}>
+                      <Text style={styles.macroValue}>{item.fibers || 0}g</Text>
+                      <Text style={styles.macroLabel}>  Fiber</Text>
+                    </Text>
+                  </View>
+                </View>
+              </View>
+              
+              <View style={styles.macroSeparator} />
+              
+              <View style={styles.footerRow}>
+                <Text style={styles.itemCaloriesValue}>{item.calories} Calories</Text>
+                <Text style={styles.perUnitText}>per 100g</Text>
+              </View>
+            </View>
           </View>
-          <TouchableOpacity style={styles.addButton} onPress={() => handleAddItemToMeal(item)}>
+          <TouchableOpacity 
+            style={styles.addButton} 
+            onPress={() => handleFoodPress(item)}
+          >
             <MaterialCommunityIcons name="plus" size={24} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
-      </Swipeable>
-    ));
+      );
+    });
   };
 
   const handleAddFoodPress = () => {
-    // Navigate to the food options screen
-    navigation.navigate('AddFoodOptions');
+    // Create a simple animation for the button press
+    const pressAnimation = new Animated.Value(1);
+    
+    Animated.sequence([
+      // First scale down
+      Animated.timing(pressAnimation, {
+        toValue: 0.95,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      // Then scale back up
+      Animated.timing(pressAnimation, {
+        toValue: 1.05,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      // Finally return to normal
+      Animated.timing(pressAnimation, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      // Navigate when animation is complete
+      navigation.navigate('AddFoodOptions');
+    });
+    
+    // Apply animation to button (we'll just simulate it here since we can't directly animate the already-pressed button)
+    setTimeout(() => {
+      navigation.navigate('AddFoodOptions');
+    }, 300);
   };
 
   const handleContinuePress = () => {
@@ -150,55 +436,70 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
     if (currentMealItems.length === 0) {
       return; // Don't navigate if cart is empty
     }
-    navigation.navigate('CustomMealReview', { 
-      selectedFoods: currentMealItems 
-    });
+    navigation.navigate('CustomMealReview', { selectedFoods: currentMealItems }); 
   };
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.container}>
-          {/* Updated Header: Back Arrow Left, Cart Right */}
-          <View style={styles.header}>
-            <TouchableOpacity onPress={navigation.goBack} style={styles.backButton}> 
-              <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+        {/* Header matching other screens exactly */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}> 
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Log Items</Text>
+          <TouchableOpacity onPress={handleCartPress} style={styles.cartButton}>
+            <Ionicons name="cart-outline" size={24} color="#FFFFFF" />
+            {cartCount > 0 && (
+              <View style={styles.cartBadge}>
+                <Text style={styles.cartBadgeText}>{cartCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {/* Main Content Area */}
+        <ScrollView 
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollViewContent}
+          showsVerticalScrollIndicator={false} 
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Updated Tabs with Animated Indicator */}
+          <View style={styles.tabContainer}>
+            {/* Animated Tab Indicator */}
+            <Animated.View 
+              style={[
+                styles.tabIndicator,
+                {
+                  transform: [{
+                    translateX: tabIndicatorPosition.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, width / 2 - 20] // Using pixel values instead of percentages
+                    })
+                  }]
+                }
+              ]} 
+            />
+            
+            <TouchableOpacity
+              style={styles.tabButton}
+              onPress={() => handleTabPress('Foods')}
+            >
+              <Text style={[styles.tabText, activeTab === 'Foods' && styles.activeTabText]}>Foods</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={handleCartPress} style={styles.cartButton}>
-              <Ionicons name="cart-outline" size={24} color="#FFFFFF" />
-              {cartCount > 0 && (
-                <View style={styles.cartBadge}>
-                  <Text style={styles.cartBadgeText}>{cartCount}</Text>
-                </View>
-              )}
+            <TouchableOpacity
+              style={styles.tabButton}
+              onPress={() => handleTabPress('Meals')}
+            >
+              <Text style={[styles.tabText, activeTab === 'Meals' && styles.activeTabText]}>Meals</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Main Content Area */}
-          <ScrollView 
-            style={styles.scrollView}
-            contentContainerStyle={styles.scrollViewContent} // Added for padding
-            showsVerticalScrollIndicator={false} 
-            keyboardShouldPersistTaps="handled"
-          >
-            {/* Tabs */}
-            <View style={styles.tabContainer}>
-              <TouchableOpacity
-                style={[styles.tabButton, activeTab === 'Foods' && styles.activeTab]}
-                onPress={() => handleTabPress('Foods')}
-              >
-                <Text style={[styles.tabText, activeTab === 'Foods' && styles.activeTabText]}>Foods</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.tabButton, activeTab === 'Meals' && styles.activeTab]}
-                onPress={() => handleTabPress('Meals')}
-              >
-                <Text style={[styles.tabText, activeTab === 'Meals' && styles.activeTabText]}>Meals</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Search Bar - Moved above add food button */}
-            <View style={styles.searchContainer}>
+          {/* Updated Search Bar with Icon */}
+          <View style={styles.searchContainer}>
+            <View style={styles.searchInputContainer}>
+              <Ionicons name="search" size={18} color="#666666" style={styles.searchIcon} />
               <TextInput
                 style={styles.searchInput}
                 placeholder="Search..."
@@ -207,46 +508,67 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
                 onChangeText={setSearchText}
               />
             </View>
-
-            {/* Add Food Button - Conditionally Rendered for Foods tab */}
-            {activeTab === 'Foods' && (
-              <TouchableOpacity style={styles.addFoodButton} onPress={handleAddFoodPress}>
-                <MaterialCommunityIcons name="plus" size={20} color="#FFFFFF" />
-                <Text style={styles.addFoodButtonText}>Add food</Text>
-              </TouchableOpacity>
-            )}
-
-            {/* Filters - Always shown for both tabs */}
-            <View style={styles.filterContainer}>
-              {['Recent', 'Created', 'Favorites'].map(filter => (
-                <TouchableOpacity
-                  key={filter}
-                  style={[styles.filterButton, activeFilter === filter && styles.activeFilter]}
-                  onPress={() => handleFilterPress(filter)}
-                >
-                  <Text style={[styles.filterText, activeFilter === filter && styles.activeFilterText]}>{filter}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {/* Content List */}
-            <View style={styles.listContainer}>
-              {renderContent()}
-            </View>
-          </ScrollView>
-
-          <View style={styles.footer}>
-            <TouchableOpacity 
-              onPress={handleContinuePress} 
-              style={[styles.continueButton, selectedItems.length === 0 && styles.disabledButton]}
-              disabled={selectedItems.length === 0}
-            >
-              <Text style={[styles.buttonText, selectedItems.length === 0 && styles.disabledButtonText]}>Continue</Text>
-            </TouchableOpacity>
           </View>
+
+          {/* Updated Add Food Button */}
+          {activeTab === 'Foods' && (
+            <TouchableOpacity style={styles.addFoodButton} onPress={handleAddFoodPress}>
+              <MaterialCommunityIcons name="plus" size={20} color="#45A557" />
+              <Text style={styles.addFoodButtonText}>Add food</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Updated Filters with Animated Indicator */}
+          <View style={styles.filterContainer}>
+            {/* Animated Filter Indicator */}
+            <Animated.View 
+              style={[
+                styles.filterIndicator,
+                {
+                  transform: [{
+                    translateX: filterIndicatorPosition.interpolate({
+                      inputRange: [0, 1, 2],
+                      outputRange: [0, (width - 40) / 3, 2 * (width - 40) / 3] // Using pixel values
+                    })
+                  }],
+                  width: (width - 40) / 3 // Ensuring width is correct
+                }
+              ]} 
+            />
+            
+            {['Recent', 'Created', 'Favorites'].map((filter) => (
+              <TouchableOpacity
+                key={filter}
+                style={styles.filterButton}
+                onPress={() => handleFilterPress(filter)}
+              >
+                <Text style={[styles.filterText, activeFilter === filter && styles.activeFilterText]}>
+                  {filter}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Content List */}
+          <View style={styles.listContainer}>
+            {renderContent()}
+          </View>
+        </ScrollView>
+
+        <View style={styles.footer}>
+          <TouchableOpacity 
+            onPress={handleContinuePress} 
+            style={[styles.continueButton, selectedItems.length === 0 && styles.disabledButton]}
+            disabled={selectedItems.length === 0}
+          >
+            <Text style={[styles.buttonText, selectedItems.length === 0 && styles.disabledButtonText]}>Continue</Text>
+          </TouchableOpacity>
         </View>
-      </SafeAreaView>
-    </GestureHandlerRootView>
+
+        {/* Quantity Modal */}
+        {renderQuantityModal()}
+      </View>
+    </SafeAreaView>
   );
 };
 
@@ -257,22 +579,29 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    // backgroundColor: '#000000', // Moved to SafeAreaView
+    backgroundColor: '#000000', // Adding background color to container
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between', // Keep space-between
+    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: Platform.OS === 'android' ? 15 : 10, // Adjust top padding slightly
     paddingHorizontal: 20,
-    paddingBottom: 10,
-    // Add border if needed
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2E2E2E',
+    width: '100%',
   },
-  backButton: { // Added style for back button
-    padding: 5, 
+  backButton: {
+    padding: 5,
+  },
+  headerTitle: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '600',
   },
   cartButton: {
     padding: 5,
+    width: 40, // Match the spacer width in other headers
   },
   cartBadge: {
     position: 'absolute',
@@ -298,38 +627,50 @@ const styles = StyleSheet.create({
   },
   tabContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
     marginHorizontal: 20,
     marginTop: 10,
-    backgroundColor: '#1A1A1A', // Darker grey for tab background
     borderRadius: 8,
-    padding: 4, // Padding around the tabs
+    height: 40,
+    position: 'relative',
+  },
+  tabIndicator: {
+    position: 'absolute',
+    width: '50%',
+    height: '100%',
+    backgroundColor: '#1A1A1A', // Match add food button background
+    borderRadius: 8,
+    zIndex: 0,
   },
   tabButton: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: 6, // Slightly rounded corners for tabs
+    justifyContent: 'center',
     alignItems: 'center',
-  },
-  activeTab: {
-    backgroundColor: '#333333', // Grey for active tab
+    zIndex: 1,
   },
   tabText: {
-    color: '#A0A0A0', // Lighter grey for inactive text
+    color: '#A0A0A0',
     fontWeight: '600',
   },
   activeTabText: {
-    color: '#FFFFFF', // White for active text
+    color: '#FFFFFF',
   },
   searchContainer: {
     paddingHorizontal: 20,
     marginTop: 15,
   },
-  searchInput: {
-    backgroundColor: '#1C1C1E', // Dark input background
+  searchInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1C1C1E',
     borderRadius: 8,
-    paddingHorizontal: 15,
-    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 12,
     color: '#FFFFFF',
     fontSize: 16,
   },
@@ -337,7 +678,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#2C2C2E', // Button color from sketch
+    backgroundColor: '#1A1A1A',
     paddingVertical: 12,
     marginHorizontal: 20,
     borderRadius: 8,
@@ -351,23 +692,24 @@ const styles = StyleSheet.create({
   },
   filterContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingHorizontal: 20,
-    marginTop: 15,
-    backgroundColor: '#1A1A1A',
-    borderRadius: 8,
     marginHorizontal: 20,
-    padding: 4,
+    marginTop: 15,
+    borderRadius: 8,
+    height: 36,
+    position: 'relative',
+  },
+  filterIndicator: {
+    position: 'absolute',
+    height: '100%',
+    backgroundColor: '#1A1A1A', // Match add food button background
+    borderRadius: 8,
+    zIndex: 0,
   },
   filterButton: {
     flex: 1,
-    paddingVertical: 8,
-    borderRadius: 6,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginHorizontal: 2, // Small gap between filters
-  },
-  activeFilter: {
-    backgroundColor: '#333333',
+    zIndex: 1,
   },
   filterText: {
     color: '#A0A0A0',
@@ -379,7 +721,6 @@ const styles = StyleSheet.create({
   listContainer: {
     paddingHorizontal: 20,
     marginTop: 15,
-    // paddingBottom: 80, // Removed, handled by scrollViewContent & footer position
   },
   listItem: {
     flexDirection: 'row',
@@ -390,11 +731,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   itemImagePlaceholder: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 45,
+    height: 45,
+    borderRadius: 22.5,
     backgroundColor: '#333333',
-    marginRight: 15,
+    marginRight: 12,
   },
   itemDetails: {
     flex: 1,
@@ -402,41 +743,75 @@ const styles = StyleSheet.create({
   },
   itemName: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
+    marginBottom: 6,
+  },
+  macroWrapper: {
+    justifyContent: 'center',
+  },
+  macrosGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginVertical: 8,
+  },
+  macrosColumn: {
+    flex: 1,
+  },
+  macroRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 4,
   },
-  itemMacros: {
+  macroDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
+  },
+  macroText: {
+    fontSize: 13,
     color: '#A0A0A0',
-    fontSize: 12,
-    marginBottom: 4,
+  },
+  macroValue: {
+    color: '#FFFFFF',
+    fontSize: 13,
+  },
+  macroLabel: {
+    color: '#A0A0A0',
+    fontSize: 13,
+  },
+  unitText: {
+    color: '#FFFFFF',
+  },
+  macroSeparator: {
+    height: 1,
+    backgroundColor: '#2E2E2E',
+    marginVertical: 8,
+  },
+  footerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 4,
   },
   itemCaloriesValue: {
-    color: '#FFFFFF',
-    fontSize: 16,
+    color: '#45A557',
+    fontSize: 15,
     fontWeight: 'bold',
+  },
+  perUnitText: {
+    color: '#A0A0A0',
+    fontSize: 11,
   },
   addButton: {
     backgroundColor: '#45A557', // Green add button
-    borderRadius: 15,
-    padding: 5,
-    marginLeft: 10,
-  },
-  deleteAction: {
-    backgroundColor: '#FF3B30',
-    justifyContent: 'center',
+    borderRadius: 20,
+    width: 36,
+    height: 36,
     alignItems: 'center',
-    width: 100,
-    height: '100%',
-    borderTopRightRadius: 12,
-    borderBottomRightRadius: 12,
-    flexDirection: 'row',
-  },
-  deleteActionText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 5,
+    justifyContent: 'center',
+    marginLeft: 8,
   },
   footer: {
     padding: 20,
@@ -464,6 +839,138 @@ const styles = StyleSheet.create({
   disabledButtonText: {
     color: '#A0A0A0',
   },
+  deleteButton: {
+    padding: 8,
+    marginLeft: 5,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: width * 0.9,
+    backgroundColor: '#1C1C1E',
+    borderRadius: 12,
+    padding: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  closeButton: {
+    padding: 5,
+  },
+  foodTitleInModal: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 10,
+  },
+  modalSubtitle: {
+    color: '#A0A0A0',
+    fontSize: 14,
+    marginBottom: 20,
+  },
+  quantityInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 25,
+  },
+  quantityInput: {
+    backgroundColor: '#2C2C2E',
+    borderRadius: 8,
+    padding: 12,
+    color: '#FFFFFF',
+    fontSize: 16,
+    flex: 0.4,
+    marginRight: 10,
+  },
+  unitSelector: {
+    flexDirection: 'row',
+    flex: 0.6,
+    backgroundColor: '#2C2C2E',
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  unitOption: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  selectedUnit: {
+    backgroundColor: '#3A3A3C',
+  },
+  selectedUnitText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  addToMealButton: {
+    backgroundColor: '#45A557',
+    borderRadius: 8,
+    padding: 15,
+    alignItems: 'center',
+  },
+  addToMealButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  dynamicMacrosContainer: {
+    backgroundColor: '#2C2C2E',
+    borderRadius: 8,
+    padding: 15,
+    marginBottom: 20,
+  },
+  calorieRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'baseline',
+    marginBottom: 15,
+  },
+  dynamicCalorieValue: {
+    color: '#45A557',
+    fontSize: 24,
+    fontWeight: '700',
+    marginRight: 6,
+  },
+  dynamicCalorieLabel: {
+    color: '#A0A0A0',
+    fontSize: 14,
+  },
+  dynamicMacrosRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 12,
+  },
+  dynamicMacroItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  dynamicMacroValue: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  dynamicMacroLabel: {
+    color: '#A0A0A0',
+    fontSize: 12,
+  },
+  proteinColor: { color: "#EF476F" },
+  carbsColor: { color: "#06D6A0" },
+  fatColor: { color: "#FFD166" },
+  sodiumColor: { color: "#FF9500" },
+  sugarColor: { color: "#D4C19C" },
+  fiberColor: { color: "#5AC8FA" },
 });
 
 export default AddMealLogScreen; 

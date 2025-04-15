@@ -14,7 +14,7 @@ import {
   Modal,
   Animated,
 } from "react-native"
-import { MaterialCommunityIcons } from "@expo/vector-icons"
+import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons"
 import type { Meal } from "../../services/mealService"
 
 const { width, height } = Dimensions.get("window")
@@ -102,8 +102,8 @@ export const MealEditScreen: React.FC<MealEditScreenProps> = ({ meal, onClose, o
       <View style={styles.centeredView}>
         <View style={styles.modalView}>
           <View style={styles.header}>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <MaterialCommunityIcons name="close" size={24} color="#EDEDED" />
+            <TouchableOpacity onPress={onClose} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
             </TouchableOpacity>
             <Text style={styles.headerTitle}>Edit Meal</Text>
             <View style={{ width: 40 }} />
@@ -284,16 +284,17 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#2E2E2E",
     backgroundColor: "#000000",
+    width: "100%",
     zIndex: 1,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
   },
   headerTitle: {
-    color: "#EDEDED",
+    color: "#FFFFFF",
     fontSize: 18,
     fontWeight: "600",
   },
-  closeButton: {
+  backButton: {
     padding: 5,
   },
   scrollView: {
@@ -387,6 +388,7 @@ const styles = StyleSheet.create({
     borderTopColor: "#2E2E2E",
     backgroundColor: "#000000",
     position: "absolute",
+    paddingBottom: 50,
     bottom: 0,
     left: 0,
     right: 0,

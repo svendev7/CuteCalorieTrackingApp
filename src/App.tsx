@@ -34,11 +34,39 @@ export default function App() {
     const [currentMealLogItems, setCurrentMealLogItems] = useState([]);
     const { user, loading: authLoading } = useAuth();
     
+    // Main screen animations
     const homeTranslate = useRef(new Animated.Value(0)).current;
     const settingsTranslate = useRef(new Animated.Value(width)).current;
     const addMealTranslate = useRef(new Animated.Value(width)).current;
     const rocketTranslate = useRef(new Animated.Value(width)).current;
     const statsTranslate = useRef(new Animated.Value(width)).current;
+    
+    // Logging flow animations
+    const addFoodOptionsTranslate = useRef(new Animated.Value(width)).current;
+    const addCustomFoodTranslate = useRef(new Animated.Value(width)).current;
+    const mealReviewTranslate = useRef(new Animated.Value(width)).current;
+    const savedMealsTranslate = useRef(new Animated.Value(width)).current;
+    
+    // Animation timing and easing
+    const ANIM_DURATION = 300;
+
+    // Effect to ensure footer visibility is consistent with screen state
+    useEffect(() => {
+        // Keep footer hidden for all screens except home
+        if (activeScreen !== 'home' || 
+            showAddFoodOptionsScreen || 
+            showAddCustomFoodScreen || 
+            showCustomMealReviewScreen || 
+            showSavedMealsScreen) {
+            setIsFooterVisible(false);
+        }
+    }, [
+        activeScreen, 
+        showAddFoodOptionsScreen, 
+        showAddCustomFoodScreen, 
+        showCustomMealReviewScreen, 
+        showSavedMealsScreen
+    ]);
 
     useEffect(() => {
         const checkOnboardingStatus = async () => {
@@ -70,27 +98,65 @@ export default function App() {
         const animations = [];
         animations.push(Animated.timing(homeTranslate, {
             toValue: activeScreen === 'home' ? 0 : -width,
-            duration: 300, useNativeDriver: true
+            duration: ANIM_DURATION, 
+            useNativeDriver: true
         }));
         animations.push(Animated.timing(settingsTranslate, {
             toValue: activeScreen === 'settings' ? 0 : width,
-            duration: 300, useNativeDriver: true
+            duration: ANIM_DURATION, 
+            useNativeDriver: true
         }));
         animations.push(Animated.timing(addMealTranslate, {
             toValue: activeScreen === 'addMeal' ? 0 : width,
-            duration: 300, useNativeDriver: true
+            duration: ANIM_DURATION, 
+            useNativeDriver: true
         }));
         animations.push(Animated.timing(rocketTranslate, {
             toValue: activeScreen === 'rocket' ? 0 : width,
-            duration: 300, useNativeDriver: true
+            duration: ANIM_DURATION, 
+            useNativeDriver: true
         }));
         animations.push(Animated.timing(statsTranslate, {
             toValue: activeScreen === 'stats' ? 0 : width,
-            duration: 300, useNativeDriver: true
+            duration: ANIM_DURATION, 
+            useNativeDriver: true
         }));
 
         Animated.parallel(animations).start();
     }, [activeScreen, homeTranslate, settingsTranslate, addMealTranslate, rocketTranslate, statsTranslate]);
+
+    // Animation effects for logging screens
+    useEffect(() => {
+        Animated.timing(addFoodOptionsTranslate, {
+            toValue: showAddFoodOptionsScreen ? 0 : width,
+            duration: ANIM_DURATION,
+            useNativeDriver: true
+        }).start();
+    }, [showAddFoodOptionsScreen]);
+
+    useEffect(() => {
+        Animated.timing(addCustomFoodTranslate, {
+            toValue: showAddCustomFoodScreen ? 0 : width,
+            duration: ANIM_DURATION,
+            useNativeDriver: true
+        }).start();
+    }, [showAddCustomFoodScreen]);
+
+    useEffect(() => {
+        Animated.timing(mealReviewTranslate, {
+            toValue: showCustomMealReviewScreen ? 0 : width,
+            duration: ANIM_DURATION,
+            useNativeDriver: true
+        }).start();
+    }, [showCustomMealReviewScreen]);
+
+    useEffect(() => {
+        Animated.timing(savedMealsTranslate, {
+            toValue: showSavedMealsScreen ? 0 : width,
+            duration: ANIM_DURATION,
+            useNativeDriver: true
+        }).start();
+    }, [showSavedMealsScreen]);
 
     const updateCustomBackground = (uri) => {
         setCustomBackground(uri);
@@ -122,10 +188,13 @@ export default function App() {
 
     const navigateTo = (screen) => {
         setActiveScreen(screen);
-        setIsFooterVisible(screen === 'home');
+        // Only show footer on home screen
+        const shouldShowFooter = screen === 'home';
+        setIsFooterVisible(shouldShowFooter);
     };
 
     const handleOpenAddMealLog = () => {
+        setIsFooterVisible(false);
         navigateTo('addMeal');
     };
 
@@ -139,22 +208,51 @@ export default function App() {
 
     const handleOpenAddFoodOptions = () => {
         setFoodToEdit(null);
+        setIsFooterVisible(false);
         setShowAddFoodOptionsScreen(true);
     };
 
     const handleCloseAddFoodOptions = () => {
-        setShowAddFoodOptionsScreen(false);
+        // Animate out first, then set state
+        Animated.timing(addFoodOptionsTranslate, {
+            toValue: width,
+            duration: ANIM_DURATION,
+            useNativeDriver: true
+        }).start(() => {
+            setShowAddFoodOptionsScreen(false);
+        });
     };
 
     const handleOpenAddOrEditCustomFood = (food: CustomFood | null = null) => {
         setFoodToEdit(food);
-        setShowAddFoodOptionsScreen(false);
-        setShowAddCustomFoodScreen(true);
+        setIsFooterVisible(false);
+        
+        // First, slide out AddFoodOptions if it's visible
+        if (showAddFoodOptionsScreen) {
+            Animated.timing(addFoodOptionsTranslate, {
+                toValue: width,
+                duration: ANIM_DURATION,
+                useNativeDriver: true
+            }).start(() => {
+                setShowAddFoodOptionsScreen(false);
+                // Then, slide in AddCustomFoodScreen
+                setShowAddCustomFoodScreen(true);
+            });
+        } else {
+            setShowAddCustomFoodScreen(true);
+        }
     };
 
     const handleCloseAddCustomFood = () => {
-        setShowAddCustomFoodScreen(false);
-        setFoodToEdit(null);
+        // Animate out first, then set state
+        Animated.timing(addCustomFoodTranslate, {
+            toValue: width,
+            duration: ANIM_DURATION,
+            useNativeDriver: true
+        }).start(() => {
+            setShowAddCustomFoodScreen(false);
+            setFoodToEdit(null);
+        });
     };
 
     const handleSaveOrUpdateCustomFood = (savedFood: CustomFood) => {
@@ -164,16 +262,32 @@ export default function App() {
 
     const handleOpenMealReview = (items) => {
         setCurrentMealLogItems(items);
+        setIsFooterVisible(false);
         setShowCustomMealReviewScreen(true);
     };
 
     const handleCloseMealReview = () => {
-        setShowCustomMealReviewScreen(false);
+        // Animate out first, then set state
+        Animated.timing(mealReviewTranslate, {
+            toValue: width,
+            duration: ANIM_DURATION,
+            useNativeDriver: true
+        }).start(() => {
+            setShowCustomMealReviewScreen(false);
+        });
     };
 
     const handleSelectSavedMeal = (meal) => {
         console.log("Selected saved meal:", meal);
-        setShowSavedMealsScreen(false);
+        
+        // Animate out first, then set state
+        Animated.timing(savedMealsTranslate, {
+            toValue: width,
+            duration: ANIM_DURATION,
+            useNativeDriver: true
+        }).start(() => {
+            setShowSavedMealsScreen(false);
+        });
     };
 
     if (isLoading || authLoading) {
@@ -215,7 +329,7 @@ export default function App() {
                             goBack: () => navigateTo('home'), 
                             navigate: (screenName, params) => { 
                                 if (screenName === 'AddFoodOptions') handleOpenAddFoodOptions(); 
-                                if (screenName === 'CustomMealReview') handleOpenMealReview(params?.items || []);
+                                if (screenName === 'CustomMealReview') handleOpenMealReview(params?.selectedFoods || []);
                                 if (screenName === 'EditCustomFood') handleOpenAddOrEditCustomFood(params?.item); 
                             }
                         }} 
@@ -227,50 +341,67 @@ export default function App() {
                 </Animated.View>
 
                 <Footer 
-                    isVisible={isFooterVisible} 
+                    isVisible={isFooterVisible && activeScreen === 'home'} 
                     onAddPress={handleOpenAddMealLog}
                     onRocketPress={handleOpenRocket}
                     onStatsPress={handleOpenStats}
                 />
 
+                {/* Animated logging flow screens */}
                 {showAddFoodOptionsScreen && (
-                    <AddFoodOptionsScreen
-                        navigation={{
-                            goBack: handleCloseAddFoodOptions,
-                            navigate: (screenName) => {
-                                if (screenName === 'AddCustomFood') handleOpenAddOrEditCustomFood();
-                            }
-                        }}
-                    />
+                    <Animated.View 
+                        style={[styles.modalScreenContainer, { transform: [{ translateX: addFoodOptionsTranslate }] }]}
+                    >
+                        <AddFoodOptionsScreen
+                            navigation={{
+                                goBack: handleCloseAddFoodOptions,
+                                navigate: (screenName) => {
+                                    if (screenName === 'AddCustomFood') handleOpenAddOrEditCustomFood();
+                                }
+                            }}
+                        />
+                    </Animated.View>
                 )}
 
                 {showAddCustomFoodScreen && (
-                    <AddCustomFoodScreen 
-                        navigation={{ 
-                            goBack: handleCloseAddCustomFood,
-                            save: handleSaveOrUpdateCustomFood 
-                        }} 
-                        route={{ params: { foodToEdit: foodToEdit } }}
-                    />
+                    <Animated.View 
+                        style={[styles.modalScreenContainer, { transform: [{ translateX: addCustomFoodTranslate }] }]}
+                    >
+                        <AddCustomFoodScreen 
+                            navigation={{ 
+                                goBack: handleCloseAddCustomFood,
+                                save: handleSaveOrUpdateCustomFood 
+                            }} 
+                            route={{ params: { foodToEdit: foodToEdit } }}
+                        />
+                    </Animated.View>
                 )}
 
                 {showCustomMealReviewScreen && (
-                    <CustomMealReviewScreen 
-                        navigation={{ 
-                            goBack: handleCloseMealReview, 
-                            navigate: (screenName, params) => {
-                                if (screenName === 'EditCustomFood') handleOpenAddOrEditCustomFood(params?.item);
-                            }
-                        }} 
-                        route={{ params: { foods: currentMealLogItems } }} 
-                    />
+                    <Animated.View 
+                        style={[styles.modalScreenContainer, { transform: [{ translateX: mealReviewTranslate }] }]}
+                    >
+                        <CustomMealReviewScreen 
+                            navigation={{ 
+                                goBack: handleCloseMealReview, 
+                                navigate: (screenName, params) => {
+                                    if (screenName === 'EditCustomFood') handleOpenAddOrEditCustomFood(params?.item);
+                                }
+                            }} 
+                            route={{ params: { selectedFoods: currentMealLogItems } }} 
+                        />
+                    </Animated.View>
                 )}
 
                 {showSavedMealsScreen && (
-                    <SavedMealsScreen 
-                        onClose={() => setShowSavedMealsScreen(false)} 
-                        onSelectMeal={handleSelectSavedMeal} 
-                    />
+                    <Animated.View 
+                        style={[styles.modalScreenContainer, { transform: [{ translateX: savedMealsTranslate }] }]}
+                    >
+                        <SavedMealsScreen 
+                            onClose={() => handleSelectSavedMeal(null)} 
+                            onSelectMeal={handleSelectSavedMeal} 
+                        />
+                    </Animated.View>
                 )}
             </View>
         </View>
@@ -307,6 +438,15 @@ const styles = StyleSheet.create({
         right: 0,
         bottom: 0,
         backgroundColor: '#000',
+    },
+    modalScreenContainer: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: '#000',
+        zIndex: 10,
     },
 });
 
