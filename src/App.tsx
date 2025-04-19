@@ -4,9 +4,8 @@ import { View, ImageBackground, StyleSheet, Dimensions, Animated, Text, Activity
 import Svg, { Path } from 'react-native-svg';
 import { HomeScreen } from './Screens/home/HomeScreen';
 import { SettingsScreen } from './Screens/settings/SettingsScreen';
-import Footer from './components/footer/Footer';
+import AnimatedFooter from './components/footer/AnimatedFooter';
 import OnboardingNavigator from './Screens/onboarding/OnboardingNavigator';
-import FirebaseExample from './components/FirebaseExample';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from './hooks/useAuth';
 import { db } from './config/firebase';
@@ -16,6 +15,7 @@ import AddCustomFoodScreen from './Screens/logging/AddCustomFoodScreen';
 import CustomMealReviewScreen from './Screens/meals/CustomMealReviewScreen';
 import { SavedMealsScreen } from './Screens/meals/SavedMealsScreen';
 import AddFoodOptionsScreen from './Screens/logging/AddFoodOptionsScreen';
+import Toast from 'react-native-toast-message';
 
 const { width, height } = Dimensions.get('window');
 
@@ -188,9 +188,17 @@ export default function App() {
 
     const navigateTo = (screen) => {
         setActiveScreen(screen);
-        // Only show footer on home screen
-        const shouldShowFooter = screen === 'home';
-        setIsFooterVisible(shouldShowFooter);
+        
+        // If returning to home screen, animate the footer in
+        if (screen === 'home') {
+            // Short delay to let the screen transition start
+            setTimeout(() => {
+                setIsFooterVisible(true);
+            }, 50);
+        } else {
+            // Hide footer immediately for other screens
+            setIsFooterVisible(false);
+        }
     };
 
     const handleOpenAddMealLog = () => {
@@ -293,7 +301,7 @@ export default function App() {
     if (isLoading || authLoading) {
         return (
             <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#fff" />
+                <ActivityIndicator size="large" color="#3498db" />
                 <Text style={styles.loadingText}>Loading...</Text>
             </View>
         );
@@ -304,121 +312,255 @@ export default function App() {
     }
 
     return (
-        <View style={styles.containerWrapper}>
-            <View style={styles.overlay} />
-            <View style={styles.contentContainer}>
-                <Animated.View style={[styles.screenContainer, { transform: [{ translateX: homeTranslate }] }] }>
+        <View style={styles.container}>
+            {/* Background */}
+            <ImageBackground 
+                source={customBackground ? { uri: customBackground } : require('../assets/bg-dark.jpg')} 
+                style={styles.backgroundImage}
+            >
+                {/* Home Screen */}
+                <Animated.View 
+                    style={[
+                        styles.screenContainer, 
+                        { transform: [{ translateX: homeTranslate }] }
+                    ]}
+                >
                     <HomeScreen 
                         onFooterVisibilityChange={setIsFooterVisible}
-                        customBackground={customBackground}
                         onSettingsPress={() => navigateTo('settings')}
+                        customBackground={customBackground}
+                        navigation={{
+                            navigate: (screen) => navigateTo(screen),
+                            addListener: (event, callback) => {
+                                // Simple mock of the navigation listener
+                                if (event === 'focus') {
+                                    // Call the callback immediately to simulate a focus event
+                                    callback();
+                                }
+                                // Return an unsubscribe function
+                                return {
+                                    remove: () => {}
+                                };
+                            }
+                        }}
                     />
                 </Animated.View>
 
-                <Animated.View style={[styles.screenContainer, { transform: [{ translateX: settingsTranslate }] }] }>
+                {/* Settings Screen */}
+                <Animated.View 
+                    style={[
+                        styles.screenContainer, 
+                        { transform: [{ translateX: settingsTranslate }] }
+                    ]}
+                >
                     <SettingsScreen 
-                        navigate={navigateTo}
+                        navigate={() => navigateTo('home')}
                         updateCustomBackground={updateCustomBackground}
                         customBackground={customBackground}
                     />
                 </Animated.View>
 
-                <Animated.View style={[styles.screenContainer, { transform: [{ translateX: addMealTranslate }] }] }>
+                {/* Add Meal Screen */}
+                <Animated.View 
+                    style={[
+                        styles.screenContainer, 
+                        { transform: [{ translateX: addMealTranslate }] }
+                    ]}
+                >
                     <AddMealLogScreen 
-                        navigation={{ 
-                            goBack: () => navigateTo('home'), 
-                            navigate: (screenName, params) => { 
-                                if (screenName === 'AddFoodOptions') handleOpenAddFoodOptions(); 
-                                if (screenName === 'CustomMealReview') handleOpenMealReview(params?.selectedFoods || []);
-                                if (screenName === 'EditCustomFood') handleOpenAddOrEditCustomFood(params?.item); 
-                            }
-                        }} 
+                        navigation={{
+                            navigate: (screen, params) => {
+                                if (screen === 'AddFoodOptions') {
+                                    handleOpenAddFoodOptions();
+                                } else if (screen === 'EditCustomFood') {
+                                    handleOpenAddOrEditCustomFood(params?.item || null);
+                                } else if (screen === 'CustomMealReview') {
+                                    handleOpenMealReview(params?.selectedFoods || []);
+                                } else if (screen === 'SavedMeals') {
+                                    setShowSavedMealsScreen(true);
+                                } else {
+                                    console.log(`Navigation to ${screen} not implemented`);
+                                }
+                            },
+                            goBack: () => navigateTo('home')
+                        }}
                     />
                 </Animated.View>
 
-                <Animated.View style={[styles.screenContainer, { transform: [{ translateX: rocketTranslate }] }] }>
-                    <FirebaseExample />
+                {/* Rocket Screen (placeholder) */}
+                <Animated.View 
+                    style={[
+                        styles.screenContainer, 
+                        { transform: [{ translateX: rocketTranslate }] }
+                    ]}
+                >
+                    <View style={styles.placeholderScreen}>
+                        <Text style={styles.placeholderText}>Unity View Coming Soon</Text>
+                        <View style={styles.buttonContainer}>
+                            <Text style={styles.buttonText} onPress={() => navigateTo('home')}>Back to Home</Text>
+                        </View>
+                    </View>
                 </Animated.View>
 
-                <Footer 
-                    isVisible={isFooterVisible && activeScreen === 'home'} 
-                    onAddPress={handleOpenAddMealLog}
-                    onRocketPress={handleOpenRocket}
-                    onStatsPress={handleOpenStats}
-                />
+                {/* Stats Screen (placeholder) */}
+                <Animated.View 
+                    style={[
+                        styles.screenContainer, 
+                        { transform: [{ translateX: statsTranslate }] }
+                    ]}
+                >
+                    <View style={styles.placeholderScreen}>
+                        <Text style={styles.placeholderText}>Stats & Progress Coming Soon</Text>
+                        <View style={styles.buttonContainer}>
+                            <Text style={styles.buttonText} onPress={() => navigateTo('home')}>Back to Home</Text>
+                        </View>
+                    </View>
+                </Animated.View>
 
-                {/* Animated logging flow screens */}
-                {showAddFoodOptionsScreen && (
-                    <Animated.View 
-                        style={[styles.modalScreenContainer, { transform: [{ translateX: addFoodOptionsTranslate }] }]}
-                    >
+                {/* Bottom Navigation (only visible on certain screens) */}
+                {isFooterVisible && (
+                    <AnimatedFooter 
+                        isVisible={isFooterVisible}
+                        onAddPress={handleOpenAddMealLog}
+                        onRocketPress={handleOpenRocket}
+                        onStatsPress={handleOpenStats}
+                    />
+                )}
+
+                {/* Add Food Options Modal (Navigation Stack) */}
+                <Animated.View 
+                    style={[
+                        styles.fullScreenModal, 
+                        { transform: [{ translateX: addFoodOptionsTranslate }] }
+                    ]}
+                >
+                    {showAddFoodOptionsScreen && (
                         <AddFoodOptionsScreen
                             navigation={{
-                                goBack: handleCloseAddFoodOptions,
-                                navigate: (screenName) => {
-                                    if (screenName === 'AddCustomFood') handleOpenAddOrEditCustomFood();
+                                navigate: (screen, params) => {
+                                    if (screen === 'AddCustomFood') {
+                                        handleOpenAddOrEditCustomFood();
+                                        handleCloseAddFoodOptions();
+                                    } else if (screen === 'SavedMeals') {
+                                        setShowSavedMealsScreen(true);
+                                        handleCloseAddFoodOptions();
+                                    } else {
+                                        console.log(`Navigation to ${screen} not implemented`);
+                                    }
+                                },
+                                goBack: handleCloseAddFoodOptions
+                            }}
+                        />
+                    )}
+                </Animated.View>
+
+                {/* Add Custom Food Screen */}
+                <Animated.View 
+                    style={[
+                        styles.fullScreenModal, 
+                        { transform: [{ translateX: addCustomFoodTranslate }] }
+                    ]}
+                >
+                    {showAddCustomFoodScreen && (
+                        <AddCustomFoodScreen
+                            navigation={{
+                                navigate: (screen, params) => {
+                                    console.log(`Navigation to ${screen} not implemented`);
+                                },
+                                goBack: handleCloseAddCustomFood,
+                                save: handleSaveOrUpdateCustomFood
+                            }}
+                            route={{
+                                params: {
+                                    foodToEdit: foodToEdit
                                 }
                             }}
                         />
-                    </Animated.View>
-                )}
+                    )}
+                </Animated.View>
 
-                {showAddCustomFoodScreen && (
-                    <Animated.View 
-                        style={[styles.modalScreenContainer, { transform: [{ translateX: addCustomFoodTranslate }] }]}
-                    >
-                        <AddCustomFoodScreen 
-                            navigation={{ 
-                                goBack: handleCloseAddCustomFood,
-                                save: handleSaveOrUpdateCustomFood 
-                            }} 
-                            route={{ params: { foodToEdit: foodToEdit } }}
-                        />
-                    </Animated.View>
-                )}
-
-                {showCustomMealReviewScreen && (
-                    <Animated.View 
-                        style={[styles.modalScreenContainer, { transform: [{ translateX: mealReviewTranslate }] }]}
-                    >
-                        <CustomMealReviewScreen 
-                            navigation={{ 
-                                goBack: handleCloseMealReview, 
-                                navigate: (screenName, params) => {
-                                    if (screenName === 'EditCustomFood') handleOpenAddOrEditCustomFood(params?.item);
+                {/* Custom Meal Review Screen */}
+                <Animated.View 
+                    style={[
+                        styles.fullScreenModal, 
+                        { transform: [{ translateX: mealReviewTranslate }] }
+                    ]}
+                >
+                    {showCustomMealReviewScreen && (
+                        <CustomMealReviewScreen
+                            navigation={{
+                                navigate: () => {},
+                                goBack: handleCloseMealReview
+                            }}
+                            route={{
+                                params: {
+                                    selectedFoods: currentMealLogItems
                                 }
-                            }} 
-                            route={{ params: { selectedFoods: currentMealLogItems } }} 
+                            }}
                         />
-                    </Animated.View>
-                )}
+                    )}
+                </Animated.View>
 
+                {/* Saved Meals Screen */}
                 {showSavedMealsScreen && (
-                    <Animated.View 
-                        style={[styles.modalScreenContainer, { transform: [{ translateX: savedMealsTranslate }] }]}
-                    >
-                        <SavedMealsScreen 
-                            onClose={() => handleSelectSavedMeal(null)} 
-                            onSelectMeal={handleSelectSavedMeal} 
-                        />
-                    </Animated.View>
+                    <SavedMealsScreen
+                        onClose={() => setShowSavedMealsScreen(false)}
+                        onSelectMeal={handleSelectSavedMeal}
+                    />
                 )}
-            </View>
+            </ImageBackground>
+            
+            {/* Toast messages component */}
+            <Toast />
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    containerWrapper: {
+    container: {
         flex: 1,
         backgroundColor: '#000',
     },
-    overlay: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-    },
-    contentContainer: {
+    backgroundImage: {
         flex: 1,
+        resizeMode: 'cover',
+    },
+    screenContainer: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: '#000',
+    },
+    placeholderScreen: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    placeholderText: {
+        color: '#fff',
+        fontSize: 18,
+        marginBottom: 20,
+    },
+    buttonContainer: {
+        backgroundColor: '#3498db',
+        padding: 10,
+        borderRadius: 5,
+    },
+    buttonText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    fullScreenModal: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: '#000',
+        zIndex: 10,
     },
     loadingContainer: {
         flex: 1,
@@ -430,23 +572,6 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: 18,
         marginTop: 10,
-    },
-    screenContainer: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: '#000',
-    },
-    modalScreenContainer: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: '#000',
-        zIndex: 10,
     },
 });
 

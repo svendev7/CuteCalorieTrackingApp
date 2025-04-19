@@ -18,8 +18,13 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
   Animated,
+  ActivityIndicator,
 } from "react-native"
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons"
+import { auth } from "../../config/firebase"
+import { addMeal } from "../../services/mealService"
+import Toast from 'react-native-toast-message'
+import * as ImagePicker from 'expo-image-picker'
 
 const { width, height } = Dimensions.get("window")
 
@@ -49,6 +54,9 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
   const [selectedFoodIndex, setSelectedFoodIndex] = useState<number | null>(null);
   const [quantity, setQuantity] = useState('100');
   const [unit, setUnit] = useState('g');
+  const [mealName, setMealName] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [mealImage, setMealImage] = useState<string | null>(null);
   const modalOffset = useRef(new Animated.Value(0)).current;
 
   // Set up keyboard listeners
@@ -105,47 +113,245 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
   };
 
   const handleDeleteFood = (index: number) => {
-    const updatedFoods = [...foods]
-    updatedFoods.splice(index, 1)
-    setFoods(updatedFoods)
-  }
+    const updatedFoods = [...foods];
+    updatedFoods.splice(index, 1);
+    setFoods(updatedFoods);
+  };
 
-  const handleConfirmPress = () => {
+  const handleConfirmPress = async () => {
     if (foods.length === 0) {
       return
     }
-    console.log("Confirming Meal with items:", foods)
-    navigation.goBack()
+    
+    try {
+      const currentUser = auth.currentUser
+      if (!currentUser) {
+        // Show error toast
+        Toast.show({
+          type: 'error',
+          text1: 'Authentication Error',
+          text2: 'You must be logged in to perform this action'
+        })
+        return
+      }
+      
+      const totalMacros = calculateTotalMacros()
+      
+      // Create a new meal object
+      await addMeal({
+        userId: currentUser.uid,
+        mealName: mealName || `Custom Meal (${new Date().toLocaleDateString()})`,
+        protein: totalMacros.protein,
+        carbs: totalMacros.carbs,
+        fat: totalMacros.fat,
+        calories: totalMacros.calories,
+        sugar: totalMacros.sugar,
+        fibers: totalMacros.fibers,
+        sodium: totalMacros.sodium,
+        date: new Date().toISOString().split('T')[0],
+        loggedTime: new Date().toISOString(),
+        foods: foods.map(food => ({
+          id: food.id,
+          name: food.name,
+          protein: food.protein,
+          carbs: food.carbs,
+          fat: food.fat,
+          calories: food.calories,
+          sodium: food.sodium || 0,
+          sugar: food.sugar || 0,
+          fibers: food.fibers || 0,
+          amount: food.amount || 100,
+          unit: food.unit || 'g'
+        })),
+        isCustom: false
+      })
+      
+      Toast.show({
+        type: 'success',
+        text1: 'Meal Confirmed',
+        text2: 'Your meal has been confirmed'
+      })
+      
+      navigation.goBack()
+    } catch (error) {
+      console.error('Error confirming meal:', error)
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to confirm meal'
+      })
+    }
   }
 
-  const handleLogPress = () => {
+  const handleLogPress = async () => {
     if (foods.length === 0) {
       return
     }
-    console.log("Logging meal with items:", foods)
-    // Here you would log the meal to the user's daily log
-    navigation.goBack()
+    
+    // Validate meal name
+    if (!mealName.trim()) {
+      Toast.show({
+        type: 'error',
+        text1: 'Name Required',
+        text2: 'Please enter a name for your meal'
+      })
+      return
+    }
+    
+    try {
+      setIsSaving(true)
+      const currentUser = auth.currentUser
+      if (!currentUser) {
+        Toast.show({
+          type: 'error',
+          text1: 'Authentication Error',
+          text2: 'You must be logged in to perform this action'
+        })
+        setIsSaving(false)
+        return
+      }
+      
+      const totalMacros = calculateTotalMacros()
+      
+      // Create a meal and log it
+      await addMeal({
+        userId: currentUser.uid,
+        mealName: mealName, // Use the required meal name
+        protein: totalMacros.protein,
+        carbs: totalMacros.carbs,
+        fat: totalMacros.fat,
+        calories: totalMacros.calories,
+        sugar: totalMacros.sugar,
+        fibers: totalMacros.fibers,
+        sodium: totalMacros.sodium,
+        date: new Date().toISOString().split('T')[0],
+        loggedTime: new Date().toISOString(),
+        foods: foods.map(food => ({
+          id: food.id,
+          name: food.name,
+          protein: food.protein,
+          carbs: food.carbs,
+          fat: food.fat,
+          calories: food.calories,
+          sodium: food.sodium || 0,
+          sugar: food.sugar || 0,
+          fibers: food.fibers || 0,
+          amount: food.amount || 100,
+          unit: food.unit || 'g'
+        })),
+        imageUrl: mealImage, // Use the selected image if available
+        isCustom: false
+      })
+      
+      Toast.show({
+        type: 'success',
+        text1: 'Meal Logged',
+        text2: 'Your meal has been logged successfully'
+      })
+      
+      navigation.goBack()
+    } catch (error) {
+      console.error('Error logging meal:', error)
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to log meal'
+      })
+    } finally {
+      setIsSaving(false)
+    }
   }
 
-  const handleLogAndSavePress = () => {
+  const handleLogAndSavePress = async () => {
     if (foods.length === 0) {
       return
     }
-    console.log("Logging and saving meal with items:", foods)
-    // Here you would log the meal to the user's daily log and save it as a custom meal
-    navigation.goBack()
+    
+    // Validate meal name
+    if (!mealName.trim()) {
+      Toast.show({
+        type: 'error',
+        text1: 'Name Required',
+        text2: 'Please enter a name for your meal'
+      })
+      return
+    }
+    
+    try {
+      setIsSaving(true)
+      const currentUser = auth.currentUser
+      if (!currentUser) {
+        Toast.show({
+          type: 'error',
+          text1: 'Authentication Error',
+          text2: 'You must be logged in to perform this action'
+        })
+        setIsSaving(false)
+        return
+      }
+      
+      const totalMacros = calculateTotalMacros()
+      
+      // Create a new meal object with isCustom: true
+      await addMeal({
+        userId: currentUser.uid,
+        mealName: mealName, // Use the required meal name
+        protein: totalMacros.protein,
+        carbs: totalMacros.carbs,
+        fat: totalMacros.fat,
+        calories: totalMacros.calories,
+        sugar: totalMacros.sugar,
+        fibers: totalMacros.fibers,
+        sodium: totalMacros.sodium,
+        date: new Date().toISOString().split('T')[0],
+        loggedTime: new Date().toISOString(),
+        foods: foods.map(food => ({
+          id: food.id,
+          name: food.name,
+          protein: food.protein,
+          carbs: food.carbs,
+          fat: food.fat,
+          calories: food.calories,
+          sodium: food.sodium || 0,
+          sugar: food.sugar || 0,
+          fibers: food.fibers || 0,
+          amount: food.amount || 100,
+          unit: food.unit || 'g'
+        })),
+        imageUrl: mealImage,
+        isCustom: true
+      })
+      
+      Toast.show({
+        type: 'success',
+        text1: 'Meal Saved',
+        text2: 'Your meal has been logged and saved'
+      })
+      
+      navigation.goBack()
+    } catch (error) {
+      console.error('Error saving meal:', error)
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to save meal'
+      })
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const calculateTotalMacros = () => {
     return foods.reduce(
       (totals, food) => {
-        totals.protein += food.protein || 0;
-        totals.carbs += food.carbs || 0;
-        totals.fat += food.fat || 0;
-        totals.calories += food.calories || 0;
-        totals.sodium += food.sodium || 0;
-        totals.sugar += food.sugar || 0;
-        totals.fibers += food.fibers || 0;
+        const multiplier = (food.amount || 100) / 100;
+        totals.protein += (food.protein || 0) * multiplier;
+        totals.carbs += (food.carbs || 0) * multiplier;
+        totals.fat += (food.fat || 0) * multiplier;
+        totals.calories += (food.calories || 0) * multiplier;
+        totals.sodium += (food.sodium || 0) * multiplier;
+        totals.sugar += (food.sugar || 0) * multiplier;
+        totals.fibers += (food.fibers || 0) * multiplier;
         return totals;
       },
       { protein: 0, carbs: 0, fat: 0, calories: 0, sodium: 0, sugar: 0, fibers: 0 },
@@ -163,13 +369,13 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
     const ratio = parseFloat(quantity) / baseAmount || 0;
     
     const calculatedMacros = {
-      protein: Math.round((selectedFood.protein * ratio) * 10) / 10,
-      carbs: Math.round((selectedFood.carbs * ratio) * 10) / 10,
-      fat: Math.round((selectedFood.fat * ratio) * 10) / 10,
+      protein: Math.round(selectedFood.protein * ratio),
+      carbs: Math.round(selectedFood.carbs * ratio),
+      fat: Math.round(selectedFood.fat * ratio),
       calories: Math.round(selectedFood.calories * ratio),
       sodium: Math.round((selectedFood.sodium || 0) * ratio),
-      sugar: Math.round((selectedFood.sugar || 0) * ratio * 10) / 10,
-      fiber: Math.round((selectedFood.fibers || 0) * ratio * 10) / 10
+      sugar: Math.round((selectedFood.sugar || 0) * ratio),
+      fiber: Math.round((selectedFood.fibers || 0) * ratio)
     };
     
     return (
@@ -278,83 +484,156 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
     );
   };
 
-  const foodItem = (food, index) => (
-    <View key={`food-${food.id || index}`} style={styles.foodItem}>
-      <View style={styles.foodItemContent}>
-        <Text style={styles.foodName}>{food.name}</Text>
-        <Text style={styles.foodAmount}>
-          {food.amount || 1} {food.unit || 'g'}
-        </Text>
-        <View style={styles.macroWrapper}>
-          <View style={styles.macrosGrid}>
-            <View style={styles.macrosColumn}>
-              <View style={styles.macroRow}>
-                <View style={[styles.macroDot, { backgroundColor: '#EF476F' }]} />
-                <Text style={styles.macroText}>
-                  <Text style={styles.macroValue}>{food.protein}g</Text>
-                  <Text style={styles.macroLabel}>  Protein</Text>
-                </Text>
+  // Handle adding image
+  const handleAddImage = async () => {
+    try {
+      // Request permission
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (permissionResult.granted === false) {
+        Toast.show({
+          type: 'error',
+          text1: 'Permission Required',
+          text2: 'You need to grant camera roll permissions to add an image'
+        });
+        return;
+      }
+      
+      // Launch image picker
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      });
+      
+      if (!result.canceled) {
+        // Use the first selected asset's URI
+        setMealImage(result.assets[0].uri);
+        Toast.show({
+          type: 'success',
+          text1: 'Image Added',
+          text2: 'Your image has been added successfully'
+        });
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to add image'
+      });
+    }
+  }
+
+  // Helper function to calculate adjusted macros based on amount
+  const calculateAdjustedMacros = (food) => {
+    const baseAmount = 100; // Base amount (typically 100g)
+    const ratio = (food.amount || 100) / baseAmount;
+    
+    return {
+      protein: Math.round(food.protein * ratio),
+      carbs: Math.round(food.carbs * ratio),
+      fat: Math.round(food.fat * ratio),
+      calories: Math.round(food.calories * ratio),
+      sodium: Math.round((food.sodium || 0) * ratio),
+      sugar: Math.round((food.sugar || 0) * ratio),
+      fibers: Math.round((food.fibers || 0) * ratio)
+    };
+  }
+
+  const foodItem = (food, index) => {
+    // Calculate adjusted macros based on the food's amount
+    const adjustedMacros = calculateAdjustedMacros(food);
+    
+    return (
+      <View key={`food-${food.id}-${index}`} style={styles.foodItem}>
+        <View style={styles.foodItemContent}>
+          <Text style={styles.foodName}>{food.name}</Text>
+          <Text style={styles.foodAmount}>
+            {food.amount || 1} {food.unit || 'g'}
+          </Text>
+          <View style={styles.macroWrapper}>
+            <View style={styles.macrosGrid}>
+              <View style={styles.macrosColumn}>
+                <View style={styles.macroRow}>
+                  <View style={[styles.macroDot, { backgroundColor: '#EF476F' }]} />
+                  <Text style={styles.macroText}>
+                    <Text style={styles.macroValue}>{adjustedMacros.protein}g</Text>
+                    <Text style={styles.macroLabel}>  Protein</Text>
+                  </Text>
+                </View>
+                <View style={styles.macroRow}>
+                  <View style={[styles.macroDot, { backgroundColor: '#06D6A0' }]} />
+                  <Text style={styles.macroText}>
+                    <Text style={styles.macroValue}>{adjustedMacros.carbs}g</Text>
+                    <Text style={styles.macroLabel}>  Carbs</Text>
+                  </Text>
+                </View>
+                <View style={styles.macroRow}>
+                  <View style={[styles.macroDot, { backgroundColor: '#FFD166' }]} />
+                  <Text style={styles.macroText}>
+                    <Text style={styles.macroValue}>{adjustedMacros.fat}g</Text>
+                    <Text style={styles.macroLabel}>  Fat</Text>
+                  </Text>
+                </View>
               </View>
-              <View style={styles.macroRow}>
-                <View style={[styles.macroDot, { backgroundColor: '#06D6A0' }]} />
-                <Text style={styles.macroText}>
-                  <Text style={styles.macroValue}>{food.carbs}g</Text>
-                  <Text style={styles.macroLabel}>  Carbs</Text>
-                </Text>
-              </View>
-              <View style={styles.macroRow}>
-                <View style={[styles.macroDot, { backgroundColor: '#FFD166' }]} />
-                <Text style={styles.macroText}>
-                  <Text style={styles.macroValue}>{food.fat}g</Text>
-                  <Text style={styles.macroLabel}>  Fat</Text>
-                </Text>
+              
+              <View style={styles.macrosColumn}>
+                <View style={styles.macroRow}>
+                  <View style={[styles.macroDot, { backgroundColor: '#FF9500' }]} />
+                  <Text style={styles.macroText}>
+                    <Text style={styles.macroValue}>{adjustedMacros.sodium}mg</Text>
+                    <Text style={styles.macroLabel}>  Sodium</Text>
+                  </Text>
+                </View>
+                <View style={styles.macroRow}>
+                  <View style={[styles.macroDot, { backgroundColor: '#D4C19C' }]} />
+                  <Text style={styles.macroText}>
+                    <Text style={styles.macroValue}>{adjustedMacros.sugar}g</Text>
+                    <Text style={styles.macroLabel}>  Sugar</Text>
+                  </Text>
+                </View>
+                <View style={styles.macroRow}>
+                  <View style={[styles.macroDot, { backgroundColor: '#5AC8FA' }]} />
+                  <Text style={styles.macroText}>
+                    <Text style={styles.macroValue}>{adjustedMacros.fibers}g</Text>
+                    <Text style={styles.macroLabel}>  Fiber</Text>
+                  </Text>
+                </View>
               </View>
             </View>
             
-            <View style={styles.macrosColumn}>
-              <View style={styles.macroRow}>
-                <View style={[styles.macroDot, { backgroundColor: '#FF9500' }]} />
-                <Text style={styles.macroText}>
-                  <Text style={styles.macroValue}>{food.sodium || 0}mg</Text>
-                  <Text style={styles.macroLabel}>  Sodium</Text>
-                </Text>
-              </View>
-              <View style={styles.macroRow}>
-                <View style={[styles.macroDot, { backgroundColor: '#D4C19C' }]} />
-                <Text style={styles.macroText}>
-                  <Text style={styles.macroValue}>{food.sugar || 0}g</Text>
-                  <Text style={styles.macroLabel}>  Sugar</Text>
-                </Text>
-              </View>
-              <View style={styles.macroRow}>
-                <View style={[styles.macroDot, { backgroundColor: '#5AC8FA' }]} />
-                <Text style={styles.macroText}>
-                  <Text style={styles.macroValue}>{food.fibers || 0}g</Text>
-                  <Text style={styles.macroLabel}>  Fiber</Text>
-                </Text>
-              </View>
+            <View style={styles.macroSeparator} />
+            
+            <View style={styles.footerRow}>
+              <Text style={styles.caloriesValue}>
+                {adjustedMacros.calories} Calories
+              </Text>
             </View>
           </View>
-          
-          <View style={styles.macroSeparator} />
-          
-          <View style={styles.footerRow}>
-            <Text style={styles.caloriesValue}>
-              {food.calories} Calories
-            </Text>
-          </View>
+        </View>
+        <View style={styles.foodItemActions}>
+          <TouchableOpacity onPress={() => handleEditFood(index)} style={styles.editButton}>
+            <MaterialCommunityIcons name="pencil" size={18} color="#EDEDED" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => handleDeleteFood(index)} style={styles.deleteItemButton}>
+            <MaterialCommunityIcons name="delete-outline" size={18} color="#FF3B30" />
+          </TouchableOpacity>
         </View>
       </View>
-      <View style={styles.foodItemActions}>
-        <TouchableOpacity onPress={() => handleEditFood(index)} style={styles.editButton}>
-          <MaterialCommunityIcons name="pencil" size={18} color="#EDEDED" />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => handleDeleteFood(index)} style={styles.deleteItemButton}>
-          <MaterialCommunityIcons name="delete-outline" size={18} color="#FF3B30" />
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
+    );
+  };
+
+  // Helper function to format macros with 1 decimal, but hide .0
+  const formatMacro = (value) => {
+    // If it's a whole number, don't show decimal
+    if (value % 1 === 0) {
+      return Math.round(value) + 'g';
+    }
+    // Otherwise show 1 decimal place
+    return value.toFixed(1) + 'g';
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -368,6 +647,39 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
         </View>
 
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+          <View style={styles.formSection}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Meal Details</Text>
+            </View>
+
+            {/* Image section */}
+            <View style={styles.imageContainer}>
+              <Image
+                source={{ uri: mealImage || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=400' }}
+                style={styles.mealImage}
+                resizeMode="cover"
+              />
+              <TouchableOpacity style={styles.changeImageButton} onPress={handleAddImage}>
+                <Text style={styles.changeImageText}>{mealImage ? 'Change Image' : 'Add Image'}</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Name input field - now required */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>
+                Meal Name <Text style={styles.requiredAsterisk}>*</Text>
+              </Text>
+              <TextInput
+                style={[styles.textInput, !mealName.trim() && styles.inputRequired]}
+                placeholder="Enter a name for this meal"
+                placeholderTextColor="#A0A0A0"
+                value={mealName}
+                onChangeText={setMealName}
+                maxLength={50}
+              />
+            </View>
+          </View>
+
           <View style={styles.formSection}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Items in Meal</Text>
@@ -392,7 +704,7 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
               <View style={styles.summaryContainer}>
                 <View style={styles.totalCaloriesContainer}>
                   <View style={styles.calorieCircle}>
-                    <Text style={styles.totalCaloriesValue}>{totalMacros.calories}</Text>
+                    <Text style={styles.totalCaloriesValue}>{Math.round(totalMacros.calories)}</Text>
                     <Text style={styles.totalCaloriesLabel}>calories</Text>
                   </View>
                 </View>
@@ -422,7 +734,7 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
                         <Text style={styles.macroSummaryLabel}>Protein</Text>
                       </View>
                       <Text style={[styles.macroSummaryValue, styles.proteinValue]}>
-                        {totalMacros.protein}g
+                        {formatMacro(totalMacros.protein)}
                       </Text>
                     </View>
                     <View style={styles.macroSummaryItem}>
@@ -431,7 +743,7 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
                         <Text style={styles.macroSummaryLabel}>Carbs</Text>
                       </View>
                       <Text style={[styles.macroSummaryValue, styles.carbsValue]}>
-                        {totalMacros.carbs}g
+                        {formatMacro(totalMacros.carbs)}
                       </Text>
                     </View>
                     <View style={styles.macroSummaryItem}>
@@ -440,7 +752,7 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
                         <Text style={styles.macroSummaryLabel}>Fat</Text>
                       </View>
                       <Text style={[styles.macroSummaryValue, styles.fatValue]}>
-                        {totalMacros.fat}g
+                        {formatMacro(totalMacros.fat)}
                       </Text>
                     </View>
                   </View>
@@ -452,7 +764,7 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
                         <Text style={styles.macroSummaryLabel}>Sodium</Text>
                       </View>
                       <Text style={[styles.macroSummaryValue, styles.sodiumValue]}>
-                        {totalMacros.sodium}mg
+                        {Math.round(totalMacros.sodium)}mg
                       </Text>
                     </View>
                     <View style={styles.macroSummaryItem}>
@@ -461,7 +773,7 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
                         <Text style={styles.macroSummaryLabel}>Sugar</Text>
                       </View>
                       <Text style={[styles.macroSummaryValue, styles.sugarValue]}>
-                        {totalMacros.sugar}g
+                        {formatMacro(totalMacros.sugar)}
                       </Text>
                     </View>
                     <View style={styles.macroSummaryItem}>
@@ -470,7 +782,7 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
                         <Text style={styles.macroSummaryLabel}>Fiber</Text>
                       </View>
                       <Text style={[styles.macroSummaryValue, styles.fibersValue]}>
-                        {totalMacros.fibers}g
+                        {formatMacro(totalMacros.fibers)}
                       </Text>
                     </View>
                   </View>
@@ -483,17 +795,25 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
         <View style={styles.footer}>
           <TouchableOpacity 
             onPress={handleLogPress} 
-            style={[styles.logButton, foods.length === 0 && styles.disabledButton]}
-            disabled={foods.length === 0}
+            style={[styles.logButton, foods.length === 0 && styles.disabledButton, isSaving && styles.disabledButton]}
+            disabled={foods.length === 0 || isSaving}
           >
-            <Text style={[styles.buttonText, foods.length === 0 && styles.disabledButtonText]}>Log</Text>
+            {isSaving ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Text style={[styles.buttonText, foods.length === 0 && styles.disabledButtonText]}>Log</Text>
+            )}
           </TouchableOpacity>
           <TouchableOpacity 
             onPress={handleLogAndSavePress} 
-            style={[styles.logAndSaveButton, foods.length === 0 && styles.disabledButton]}
-            disabled={foods.length === 0}
+            style={[styles.logAndSaveButton, foods.length === 0 && styles.disabledButton, isSaving && styles.disabledButton]}
+            disabled={foods.length === 0 || isSaving}
           >
-            <Text style={[styles.buttonText, foods.length === 0 && styles.disabledButtonText]}>Log & Save</Text>
+            {isSaving ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Text style={[styles.buttonText, foods.length === 0 && styles.disabledButtonText]}>Log & Save</Text>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -508,12 +828,6 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: "#000000",
-  },
-  centeredView: {
-    flex: 1,
-    justifyContent: "flex-end",
-    alignItems: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.7)",
   },
   modalView: {
     flex: 1,
@@ -574,6 +888,55 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
+  imageContainer: {
+    alignItems: "center",
+    marginVertical: 15,
+  },
+  mealImage: {
+    width: width * 0.4,
+    height: width * 0.4,
+    borderRadius: width * 0.2,
+    backgroundColor: "#1C1C1E",
+    borderWidth: 1,
+    borderColor: "#2E2E2E",
+  },
+  changeImageButton: {
+    marginTop: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 15,
+    backgroundColor: "#1A1A1A",
+    borderRadius: 8,
+  },
+  changeImageText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  inputGroup: {
+    marginBottom: 15,
+  },
+  inputLabel: {
+    color: "#A0A0A0",
+    fontSize: 14,
+    marginBottom: 8,
+  },
+  requiredAsterisk: {
+    color: "#FF3B30",
+    fontWeight: "700",
+  },
+  textInput: {
+    backgroundColor: "#1C1C1E",
+    borderWidth: 1,
+    borderColor: "#2E2E2E",
+    borderRadius: 8,
+    color: "#FFFFFF",
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    fontSize: 16,
+  },
+  inputRequired: {
+    borderColor: "#FF3B30",
+  },
   foodItem: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -632,9 +995,6 @@ const styles = StyleSheet.create({
     color: '#A0A0A0',
     fontSize: 13,
   },
-  unitText: {
-    color: '#FFFFFF',
-  },
   macroSeparator: {
     height: 1,
     backgroundColor: '#2E2E2E',
@@ -650,10 +1010,6 @@ const styles = StyleSheet.create({
     color: "#45A557",
     fontSize: 15,
     fontWeight: "bold",
-  },
-  perUnitText: {
-    color: "#A0A0A0",
-    fontSize: 11,
   },
   foodItemActions: {
     alignItems: 'center',
@@ -783,24 +1139,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     textAlign: 'center',
   },
-  proteinValue: { 
-    color: "#EF476F",
-  },
-  carbsValue: { 
-    color: "#06D6A0",
-  },
-  fatValue: { 
-    color: "#FFD166",
-  },
-  sodiumValue: { 
-    color: "#FF9500",
-  },
-  sugarValue: { 
-    color: "#D4C19C", 
-  },
-  fibersValue: { 
-    color: "#5AC8FA",
-  },
   footer: {
     flexDirection: "row",
     paddingHorizontal: 20,
@@ -840,18 +1178,6 @@ const styles = StyleSheet.create({
   },
   disabledButtonText: {
     color: "#A0A0A0",
-  },
-  confirmButton: {
-    backgroundColor: "#45A557",
-    paddingVertical: 14,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  confirmButtonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "600",
   },
   modalOverlay: {
     flex: 1,
@@ -923,6 +1249,9 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '600',
   },
+  unitText: {
+    color: '#FFFFFF',
+  },
   updateButton: {
     backgroundColor: '#45A557',
     borderRadius: 8,
@@ -974,6 +1303,24 @@ const styles = StyleSheet.create({
   dynamicMacroLabel: {
     color: '#A0A0A0',
     fontSize: 12,
+  },
+  proteinValue: { 
+    color: "#EF476F",
+  },
+  carbsValue: { 
+    color: "#06D6A0",
+  },
+  fatValue: { 
+    color: "#FFD166",
+  },
+  sodiumValue: { 
+    color: "#FF9500",
+  },
+  sugarValue: { 
+    color: "#D4C19C", 
+  },
+  fibersValue: { 
+    color: "#5AC8FA",
   },
 })
 

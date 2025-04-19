@@ -178,7 +178,7 @@ export const AddCustomFoodScreen: React.FC<AddCustomFoodScreenProps> = ({ naviga
             {/* Image Section */}
             <View style={styles.imageContainer}>
               <Image
-                source={{ uri: foodDetails.imageUrl || 'https://via.placeholder.com/200' }}
+                source={{ uri: foodDetails.imageUrl || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=400' }}
                 style={styles.foodImage}
                 resizeMode="cover"
               />

@@ -40,7 +40,13 @@ export const MealEditScreen: React.FC<MealEditScreenProps> = ({ meal, onClose, o
   const contentOffset = useState(new Animated.Value(0))[0]
 
   const handleSave = () => {
-    onSave(editedMeal)
+    // Make sure we're preserving all necessary fields from the original meal
+    const updatedMeal: Meal = {
+      ...meal, // Keep all original fields
+      ...editedMeal, // Apply edits
+      updatedAt: new Date() as any, // Update the timestamp
+    }
+    onSave(updatedMeal)
   }
 
   const handleInputChange = (field: keyof Meal, value: string) => {
@@ -117,7 +123,7 @@ export const MealEditScreen: React.FC<MealEditScreenProps> = ({ meal, onClose, o
             <Animated.View style={[styles.contentContainer, { transform: [{ translateY: contentOffset }] }]}>
               <View style={styles.imageContainer}>
                 <Image
-                  source={{ uri: editedMeal.imageUrl || "https://via.placeholder.com/200" }}
+                  source={{ uri: editedMeal.imageUrl || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=400" }}
                   style={styles.mealImage}
                   resizeMode="cover"
                 />

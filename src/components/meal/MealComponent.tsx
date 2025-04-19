@@ -22,7 +22,7 @@ export const MealComponent = ({
   fat,
   calories,
   loggedTime,
-  imageUrl = "https://via.placeholder.com/80",
+  imageUrl = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=400",
   onPress,
 }: MealComponentProps) => {
   return (
@@ -35,9 +35,20 @@ export const MealComponent = ({
           <Text style={styles.mealName} numberOfLines={1} ellipsizeMode="tail">
             {mealName}
           </Text>
-          <Text style={styles.macroText}>
-            {protein}g Protein • {carbs}g Carbs • {fat}g Fat
-          </Text>
+          <View style={styles.macrosRow}>
+            <View style={styles.macroItem}>
+              <Text style={[styles.macroValue, styles.proteinColor]}>{protein}g</Text>
+              <Text style={styles.macroLabel}>Protein</Text>
+            </View>
+            <View style={styles.macroItem}>
+              <Text style={[styles.macroValue, styles.carbsColor]}>{carbs}g</Text>
+              <Text style={styles.macroLabel}>Carbs</Text>
+            </View>
+            <View style={styles.macroItem}>
+              <Text style={[styles.macroValue, styles.fatColor]}>{fat}g</Text>
+              <Text style={styles.macroLabel}>Fat</Text>
+            </View>
+          </View>
           <View style={styles.timeContainer}>
             <MaterialCommunityIcons name="clock-outline" size={14} color="#A0A0A0" />
             <Text style={styles.timeText}>{loggedTime}</Text>

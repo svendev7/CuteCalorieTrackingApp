@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Dimensions, SafeAreaView, Platform, Alert, Modal, Animated, TouchableWithoutFeedback, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Dimensions, SafeAreaView, Platform, Alert, Modal, Animated, TouchableWithoutFeedback, Keyboard, ActivityIndicator } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'; // Using Ionicons for cart
+import { auth } from '../../config/firebase';
+import { getRecentMealsByUserId, getFavoriteMealsByUserId, getSavedMealsByUserId } from '../../services/mealService';
 
 const { width, height } = Dimensions.get('window');
 
@@ -49,6 +51,12 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
   const modalOffset = useRef(new Animated.Value(0)).current;
   const tabIndicatorPosition = useRef(new Animated.Value(0)).current;
   const filterIndicatorPosition = useRef(new Animated.Value(0)).current;
+  
+  // Add states for Firestore data
+  const [foodItems, setFoodItems] = useState<FoodItem[]>([]);
+  const [mealItems, setMealItems] = useState<MealItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Set up keyboard listeners
   useEffect(() => {
@@ -80,18 +88,91 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
     };
   }, []);
 
-  // Dummy data - replace with actual data fetching later
-  const foodItems: FoodItem[] = [
-    { id: '1', name: "Potato's & Chicken &..", protein: 20, carbs: 44, fat: 12, calories: 500, sodium: 400, sugar: 5, fibers: 3, type: 'Created' },
-    { id: '2', name: 'Grilled Salmon', protein: 32, carbs: 15, fat: 18, calories: 380, sodium: 120, sugar: 0, fibers: 0, type: 'Recent' },
-    // Add more dummy items
-  ];
-  const mealItems: MealItem[] = [
-    { id: 'm1', name: 'Breakfast Burrito', calories: 600, protein: 25, carbs: 60, fat: 30, sodium: 800, sugar: 10, fibers: 5, type: 'Recent' },
-    { id: 'm2', name: 'Protein Lunch', calories: 750, protein: 40, carbs: 50, fat: 25, sodium: 600, sugar: 5, fibers: 8, type: 'Created' },
-    { id: 'm3', name: 'Healthy Dinner', calories: 550, protein: 35, carbs: 40, fat: 20, sodium: 350, sugar: 2, fibers: 10, type: 'Favorites' },
-    // Add more dummy meals
-  ];
+  // Fetch meals based on active filter
+  useEffect(() => {
+    fetchMeals();
+  }, [activeFilter]);
+
+  const fetchMeals = async () => {
+    try {
+      setLoading(true);
+      const currentUser = auth.currentUser;
+      
+      if (!currentUser) {
+        throw new Error('User not authenticated');
+      }
+      
+      let meals = [];
+      
+      switch (activeFilter) {
+        case 'Recent':
+          meals = await getRecentMealsByUserId(currentUser.uid);
+          break;
+        case 'Favorites':
+          meals = await getFavoriteMealsByUserId(currentUser.uid);
+          break;
+        case 'Created':
+          meals = await getSavedMealsByUserId(currentUser.uid);
+          break;
+        default:
+          meals = await getRecentMealsByUserId(currentUser.uid);
+      }
+      
+      // Transform meals to the format expected by the UI
+      const transformedMeals = meals.map(meal => ({
+        id: meal.id,
+        name: meal.mealName,
+        calories: meal.calories,
+        protein: meal.protein,
+        carbs: meal.carbs,
+        fat: meal.fat,
+        sodium: meal.sodium,
+        sugar: meal.sugar,
+        fibers: meal.fibers,
+        type: activeFilter as 'Recent' | 'Created' | 'Favorites'
+      }));
+      
+      if (activeTab === 'Meals') {
+        setMealItems(transformedMeals);
+      } else {
+        // For now, we don't have individual foods in Firestore
+        // This would need to be implemented separately
+        setFoodItems([
+          { 
+            id: '1', 
+            name: "Chicken (Sample)", 
+            protein: 20, 
+            carbs: 0, 
+            fat: 5, 
+            calories: 165, 
+            sodium: 400, 
+            sugar: 0, 
+            fibers: 0, 
+            type: activeFilter as 'Recent' | 'Created' | 'Favorites' 
+          },
+          { 
+            id: '2', 
+            name: "Rice (Sample)", 
+            protein: 4, 
+            carbs: 45, 
+            fat: 0, 
+            calories: 200, 
+            sodium: 10, 
+            sugar: 0, 
+            fibers: 1, 
+            type: activeFilter as 'Recent' | 'Created' | 'Favorites' 
+          }
+        ]);
+      }
+      
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching meals:', err);
+      setError('Failed to load meals');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleTabPress = (tabName: string) => {
     // Animate tab indicator
@@ -112,6 +193,9 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
       tension: 100,
       useNativeDriver: false,
     }).start();
+    
+    // Fetch data when tab changes
+    fetchMeals();
   };
 
   const handleFilterPress = (filterName: string) => {
@@ -130,13 +214,16 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
   };
 
   const handleAddItemToMeal = (item: FoodItem | MealItem, selectedQuantity: string = '100', selectedUnit: string = 'g') => {
-    console.log('Adding:', item.name, selectedQuantity, selectedUnit);
     // Ensure item has all required fields for Food interface in CustomMealReviewScreen
     const enhancedItem = {
       ...item,
       // Add default values for any missing properties needed in CustomMealReviewScreen
       amount: parseFloat(selectedQuantity) || 100,
       unit: selectedUnit || 'g',
+      // Ensure these fields exist for the Food interface in CustomMealReviewScreen
+      sugar: item.sugar || 0,
+      fibers: item.fibers || 0,
+      sodium: item.sodium || 0,
     };
     setCurrentMealItems(prev => [...prev, enhancedItem]); // Add to internal state
     setSelectedItems(prev => [...prev, enhancedItem]); // Also add to selected items for continue button
@@ -144,13 +231,10 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
   };
 
   const handleEditItem = (item: FoodItem | MealItem) => {
-    console.log('Editing:', item.name);
     // Navigate to edit screen or show modal
     // Ensure item is a FoodItem before trying to edit (Meals might not be editable this way)
     if ('protein' in item) { // Simple check if it's a FoodItem
       navigation.navigate('EditCustomFood', { item }); // Use the new navigation target
-    } else {
-      console.log("Cannot edit Meal items from this screen.");
     }
   };
 
@@ -289,6 +373,27 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
   };
 
   const renderContent = () => {
+    if (loading) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#3E92CC" />
+          <Text style={styles.loadingText}>Loading...</Text>
+        </View>
+      );
+    }
+    
+    if (error) {
+      return (
+        <View style={styles.errorContainer}>
+          <MaterialCommunityIcons name="alert-circle" size={40} color="#FF3B30" />
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity onPress={fetchMeals} style={styles.retryButton}>
+            <Text style={styles.retryText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    
     const itemsToDisplay: (FoodItem | MealItem)[] = activeTab === 'Foods' ? foodItems : mealItems;
     const filteredItems = itemsToDisplay.filter(item => {
       const nameMatch = item.name.toLowerCase().includes(searchText.toLowerCase());
@@ -319,52 +424,52 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
             <Text style={styles.itemName} numberOfLines={1} ellipsizeMode="tail">{item.name}</Text>
             <View style={styles.macroWrapper}>
               <View style={styles.macrosGrid}>
-                <View style={styles.macrosColumn}>
-                  <View style={styles.macroRow}>
-                    <View style={[styles.macroDot, { backgroundColor: '#EF476F' }]} />
-                    <Text style={styles.macroText}>
-                      <Text style={styles.macroValue}>{item.protein}g</Text>
-                      <Text style={styles.macroLabel}>  Protein</Text>
-                    </Text>
-                  </View>
-                  <View style={styles.macroRow}>
-                    <View style={[styles.macroDot, { backgroundColor: '#06D6A0' }]} />
-                    <Text style={styles.macroText}>
-                      <Text style={styles.macroValue}>{item.carbs}g</Text>
-                      <Text style={styles.macroLabel}>  Carbs</Text>
-                    </Text>
-                  </View>
-                  <View style={styles.macroRow}>
-                    <View style={[styles.macroDot, { backgroundColor: '#FFD166' }]} />
-                    <Text style={styles.macroText}>
-                      <Text style={styles.macroValue}>{item.fat}g</Text>
-                      <Text style={styles.macroLabel}>  Fat</Text>
-                    </Text>
-                  </View>
+                <View style={styles.macroRow}>
+                  <View style={[styles.macroDot, { backgroundColor: '#EF476F' }]} />
+                  <Text style={styles.macroText}>
+                    <Text style={styles.macroValue}>{item.protein}g</Text>
+                    <Text style={styles.macroLabel}>  Protein</Text>
+                  </Text>
                 </View>
-                
-                <View style={styles.macrosColumn}>
-                  <View style={styles.macroRow}>
-                    <View style={[styles.macroDot, { backgroundColor: '#FF9500' }]} />
-                    <Text style={styles.macroText}>
-                      <Text style={styles.macroValue}>{item.sodium || 0}mg</Text>
-                      <Text style={styles.macroLabel}>  Sodium</Text>
-                    </Text>
-                  </View>
-                  <View style={styles.macroRow}>
-                    <View style={[styles.macroDot, { backgroundColor: '#D4C19C' }]} />
-                    <Text style={styles.macroText}>
-                      <Text style={styles.macroValue}>{item.sugar || 0}g</Text>
-                      <Text style={styles.macroLabel}>  Sugar</Text>
-                    </Text>
-                  </View>
-                  <View style={styles.macroRow}>
-                    <View style={[styles.macroDot, { backgroundColor: '#5AC8FA' }]} />
-                    <Text style={styles.macroText}>
-                      <Text style={styles.macroValue}>{item.fibers || 0}g</Text>
-                      <Text style={styles.macroLabel}>  Fiber</Text>
-                    </Text>
-                  </View>
+                <View style={styles.macroRow}>
+                  <View style={[styles.macroDot, { backgroundColor: '#06D6A0' }]} />
+                  <Text style={styles.macroText}>
+                    <Text style={styles.macroValue}>{item.carbs}g</Text>
+                    <Text style={styles.macroLabel}>  Carbs</Text>
+                  </Text>
+                </View>
+                <View style={styles.macroRow}>
+                  <View style={[styles.macroDot, { backgroundColor: '#FFD166' }]} />
+                  <Text style={styles.macroText}>
+                    <Text style={styles.macroValue}>{item.fat}g</Text>
+                    <Text style={styles.macroLabel}>  Fat</Text>
+                  </Text>
+                </View>
+              </View>
+              
+              <View style={styles.macroSeparator} />
+
+              <View style={styles.macrosGrid}>
+                <View style={styles.macroRow}>
+                  <View style={[styles.macroDot, { backgroundColor: '#FF9500' }]} />
+                  <Text style={styles.macroText}>
+                    <Text style={styles.macroValue}>{item.sodium || 0}mg</Text>
+                    <Text style={styles.macroLabel}>  Sodium</Text>
+                  </Text>
+                </View>
+                <View style={styles.macroRow}>
+                  <View style={[styles.macroDot, { backgroundColor: '#D4C19C' }]} />
+                  <Text style={styles.macroText}>
+                    <Text style={styles.macroValue}>{item.sugar || 0}g</Text>
+                    <Text style={styles.macroLabel}>  Sugar</Text>
+                  </Text>
+                </View>
+                <View style={styles.macroRow}>
+                  <View style={[styles.macroDot, { backgroundColor: '#5AC8FA' }]} />
+                  <Text style={styles.macroText}>
+                    <Text style={styles.macroValue}>{item.fibers || 0}g</Text>
+                    <Text style={styles.macroLabel}>  Fiber</Text>
+                  </Text>
                 </View>
               </View>
               
@@ -753,15 +858,13 @@ const styles = StyleSheet.create({
   macrosGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginVertical: 8,
-  },
-  macrosColumn: {
-    flex: 1,
+    marginVertical: 4,
   },
   macroRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 4,
+    flex: 1,
   },
   macroDot: {
     width: 8,
@@ -971,6 +1074,41 @@ const styles = StyleSheet.create({
   sodiumColor: { color: "#FF9500" },
   sugarColor: { color: "#D4C19C" },
   fiberColor: { color: "#5AC8FA" },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 40,
+  },
+  loadingText: {
+    color: '#EDEDED',
+    fontSize: 16,
+    marginTop: 12,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 40,
+  },
+  errorText: {
+    color: '#FF3B30',
+    fontSize: 16,
+    textAlign: 'center',
+    marginVertical: 10,
+    paddingHorizontal: 20,
+  },
+  retryButton: {
+    backgroundColor: '#3E92CC',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginTop: 10,
+  },
+  retryText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
 });
 
 export default AddMealLogScreen; 

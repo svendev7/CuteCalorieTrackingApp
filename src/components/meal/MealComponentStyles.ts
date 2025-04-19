@@ -53,6 +53,34 @@ export const styles = StyleSheet.create({
       fontSize: 11,
       marginBottom: 4,
     },
+    // New styles for the 3-column macro layout
+    macrosRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      marginBottom: 4,
+      width: "100%",
+    },
+    macroItem: {
+      alignItems: "center",
+      flex: 1,
+    },
+    macroValue: {
+      fontSize: 12,
+      fontWeight: "600",
+    },
+    macroLabel: {
+      color: colors.secondary,
+      fontSize: 10,
+    },
+    proteinColor: {
+      color: colors.protein,
+    },
+    carbsColor: {
+      color: colors.carbs,
+    },
+    fatColor: {
+      color: colors.fat,
+    },
     timeContainer: {
       flexDirection: "row",
       alignItems: "center",

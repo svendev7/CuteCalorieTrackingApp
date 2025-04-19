@@ -146,7 +146,6 @@ export const styles = StyleSheet.create({
     height: 30,
     backgroundColor: colors.cardBackground,
     borderColor: colors.cardBorder,
-    borderWidth: 1,
     borderRadius: 15,
     zIndex: 10,
     alignItems: 'center',
@@ -176,8 +175,6 @@ export const styles = StyleSheet.create({
     width: '100%',
     height: 175,
     backgroundColor: colors.cardBackground,
-    borderColor: colors.cardBorder,
-    borderWidth: 1,
     borderRadius: 15,
     marginBottom: 10,
     zIndex: 999,
@@ -186,7 +183,6 @@ export const styles = StyleSheet.create({
     width: '100%',
     backgroundColor: colors.cardBackground,
     borderColor: colors.cardBorder,
-    borderWidth: 1,
     borderRadius: 15,
     paddingVertical: 20,
     zIndex: 999,
@@ -389,6 +385,46 @@ export const styles = StyleSheet.create({
     alignItems: 'center',   // Center content horizontally
     backgroundColor: 'rgba(0, 0, 0, 0.6)', // Semi-transparent background
     zIndex: 100, // Ensure it's above everything else (MealViewer wrapper has zIndex 5)
+  },
+  footer: {
+    position: 'absolute',
+    bottom: -height * 0.016, // Slight adjustment to match Union SVG design
+    width: '100%',
+    height: height * 0.115,
+    backgroundColor: "rgba(0, 0, 0, 0.8)",
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 100,
+  },
+  
+  footerButton: {
+    backgroundColor: "#45A557", // Green button
+    paddingVertical: 12,
+    paddingHorizontal: 25,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  
+  footerAddButton: {
+    backgroundColor: "#45A557", // Green button
+    width: width * 0.15,
+    height: width * 0.15,
+    borderRadius: width * 0.15 / 2, // Make it perfectly circular
+    alignItems: "center",
+    justifyContent: "center",
+    elevation: 8, // Add shadow for Android
+    shadowColor: "#000", // Shadow for iOS
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  
+  footerButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "600",
   },
 });
 

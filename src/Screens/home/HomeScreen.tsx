@@ -7,276 +7,75 @@ import HeartIcon from "@assets/Heart.svg"
 import FlameIcon from "@assets/Vector.svg"
 import CogIcon from "@assets/Settings.svg"
 import StoreIcon from "@assets/Store.svg"
-
+import Plus from "@assets/Plus.svg"
 const { width, height } = Dimensions.get("window")
 import { PebblyPal } from "../../components/pebbly/PebblyPal"
 import { MealViewer } from "../../components/mealViewer/MealViewer"
 import { MealEditScreen } from "../meals/MealEditScreen"
 import type { Meal } from "../../services/mealService"
+import { getMealsByDate, updateMeal } from "../../services/mealService"
 import { useAuth } from "../../hooks/useAuth"
 
-// Current day meal data (Friday, Mar 14)
-const todayMealData = [
-  {
-    id: 1,
-    mealName: "Potato's & Chicken & Carrots",
-    protein: 20,
-    carbs: 80,
-    fat: 44,
-    calories: 500,
-    sugar: 5,
-    fibers: 33,
-    sodium: 12,
-    loggedTime: "10:44 AM",
-    date: "Friday, Mar 14",
-    imageUrl: "https://via.placeholder.com/80",
-  },
-  {
-    id: 2,
-    mealName: "Grilled Salmon with Asparagus",
-    protein: 32,
-    carbs: 15,
-    fat: 18,
-    calories: 380,
-    sugar: 3,
-    fibers: 8,
-    sodium: 15,
-    loggedTime: "1:30 PM",
-    date: "Friday, Mar 14",
-    imageUrl: "https://via.placeholder.com/80",
-  },
-  {
-    id: 3,
-    mealName: "Greek Yogurt with Berries",
-    protein: 15,
-    carbs: 25,
-    fat: 5,
-    calories: 220,
-    sugar: 18,
-    fibers: 4,
-    sodium: 8,
-    loggedTime: "8:15 AM",
-    date: "Friday, Mar 14",
-    imageUrl: "https://via.placeholder.com/80",
-  },
-  {
-    id: 4,
-    mealName: "Quinoa Bowl with Avocado",
-    protein: 12,
-    carbs: 35,
-    fat: 14,
-    calories: 320,
-    sugar: 2,
-    fibers: 12,
-    sodium: 10,
-    loggedTime: "7:20 PM",
-    date: "Friday, Mar 14",
-    imageUrl: "https://via.placeholder.com/80",
-  },
-]
-
-// Thursday, Mar 13
-const thursdayMealData = [
-  {
-    id: 101,
-    mealName: "Protein Shake with Banana",
-    protein: 25,
-    carbs: 30,
-    fat: 5,
-    calories: 280,
-    sugar: 20,
-    fibers: 3,
-    sodium: 5,
-    loggedTime: "3:45 PM",
-    date: "Thursday, Mar 13",
-    imageUrl: "https://via.placeholder.com/80",
-  },
-  {
-    id: 102,
-    mealName: "Egg White Omelette",
-    protein: 18,
-    carbs: 8,
-    fat: 10,
-    calories: 210,
-    sugar: 1,
-    fibers: 2,
-    sodium: 14,
-    loggedTime: "9:00 AM",
-    date: "Thursday, Mar 13",
-    imageUrl: "https://via.placeholder.com/80",
-  },
-  {
-    id: 103,
-    mealName: "Chicken Caesar Salad",
-    protein: 28,
-    carbs: 12,
-    fat: 15,
-    calories: 340,
-    sugar: 3,
-    fibers: 6,
-    sodium: 18,
-    loggedTime: "12:15 PM",
-    date: "Thursday, Mar 13",
-    imageUrl: "https://via.placeholder.com/80",
-  },
-]
-
-// Wednesday, Mar 12
-const wednesdayMealData = [
-  {
-    id: 201,
-    mealName: "Avocado Toast",
-    protein: 10,
-    carbs: 35,
-    fat: 15,
-    calories: 310,
-    sugar: 2,
-    fibers: 7,
-    sodium: 8,
-    loggedTime: "10:30 AM",
-    date: "Wednesday, Mar 12",
-    imageUrl: "https://via.placeholder.com/80",
-  },
-  {
-    id: 202,
-    mealName: "Tuna Sandwich",
-    protein: 25,
-    carbs: 30,
-    fat: 12,
-    calories: 340,
-    sugar: 3,
-    fibers: 5,
-    sodium: 15,
-    loggedTime: "1:15 PM",
-    date: "Wednesday, Mar 12",
-    imageUrl: "https://via.placeholder.com/80",
-  },
-  {
-    id: 203,
-    mealName: "Steak with Sweet Potato",
-    protein: 35,
-    carbs: 40,
-    fat: 20,
-    calories: 480,
-    sugar: 8,
-    fibers: 6,
-    sodium: 12,
-    loggedTime: "7:45 PM",
-    date: "Wednesday, Mar 12",
-    imageUrl: "https://via.placeholder.com/80",
-  },
-]
-
-// Tuesday, Mar 11
-const tuesdayMealData = [
-  {
-    id: 301,
-    mealName: "Overnight Oats",
-    protein: 12,
-    carbs: 45,
-    fat: 8,
-    calories: 300,
-    sugar: 15,
-    fibers: 10,
-    sodium: 5,
-    loggedTime: "8:00 AM",
-    date: "Tuesday, Mar 11",
-    imageUrl: "https://via.placeholder.com/80",
-  },
-  {
-    id: 302,
-    mealName: "Burrito Bowl",
-    protein: 22,
-    carbs: 65,
-    fat: 18,
-    calories: 510,
-    sugar: 5,
-    fibers: 12,
-    sodium: 20,
-    loggedTime: "1:00 PM",
-    date: "Tuesday, Mar 11",
-    imageUrl: "https://via.placeholder.com/80",
-  },
-  {
-    id: 303,
-    mealName: "Grilled Chicken Sandwich",
-    protein: 28,
-    carbs: 32,
-    fat: 15,
-    calories: 380,
-    sugar: 4,
-    fibers: 3,
-    sodium: 16,
-    loggedTime: "6:30 PM",
-    date: "Tuesday, Mar 11",
-    imageUrl: "https://via.placeholder.com/80",
-  },
-  {
-    id: 304,
-    mealName: "Vanilla Greek Yogurt",
-    protein: 15,
-    carbs: 12,
-    fat: 4,
-    calories: 140,
-    sugar: 10,
-    fibers: 0,
-    sodium: 3,
-    loggedTime: "9:45 PM",
-    date: "Tuesday, Mar 11",
-    imageUrl: "https://via.placeholder.com/80",
-  },
-]
-
-// Helper function to calculate daily totals (replace with actual logic/fetching)
-const calculateDailyTotals = (meals) => {
+// Helper function to calculate daily totals
+const calculateDailyTotals = (meals: Meal[]) => {
   if (!meals || meals.length === 0) {
     return { proteinConsumed: 0, carbsConsumed: 0, fatConsumed: 0, totalCaloriesConsumed: 0 }
   }
   return meals.reduce(
     (totals, meal) => {
-      totals.proteinConsumed += meal.protein
-      totals.carbsConsumed += meal.carbs
-      totals.fatConsumed += meal.fat
-      totals.totalCaloriesConsumed += meal.calories
+      totals.proteinConsumed += meal.protein || 0
+      totals.carbsConsumed += meal.carbs || 0
+      totals.fatConsumed += meal.fat || 0
+      totals.totalCaloriesConsumed += meal.calories || 0
       return totals
     },
     { proteinConsumed: 0, carbsConsumed: 0, fatConsumed: 0, totalCaloriesConsumed: 0 },
   )
 }
 
-// --- Historical Data Structure (Modify this if fetching from API) ---
-// Structure: Array of objects, each representing a day with its meals and GOALS
-// For simplicity, we'll use fixed goals here, but ideally, goals could vary per day.
-const historicalDays = [
-  {
-    date: "Thursday, Mar 13",
-    mealData: thursdayMealData,
-    proteinGoal: 140,
-    carbsGoal: 120,
-    fatGoal: 50,
-    calorieGoal: 1900,
-  },
-  {
-    date: "Wednesday, Mar 12",
-    mealData: wednesdayMealData,
-    proteinGoal: 160,
-    carbsGoal: 100,
-    fatGoal: 40,
-    calorieGoal: 2000,
-  },
-  {
-    date: "Tuesday, Mar 11",
-    mealData: tuesdayMealData,
-    proteinGoal: 150,
-    carbsGoal: 110,
-    fatGoal: 45,
-    calorieGoal: 2100,
-  },
-]
+// Helper function to format date as "Day, Month Date" (e.g., "Friday, Mar 14")
+const formatDate = (dateString: string): string => {
+  const date = new Date(dateString)
+  const options: Intl.DateTimeFormatOptions = { 
+    weekday: 'long', 
+    month: 'short', 
+    day: 'numeric' 
+  }
+  return date.toLocaleDateString('en-US', options)
+}
 
-// --- Define MealData type (add calorieGoal if needed per day) ---
+// Helper function to get previous date
+const getPreviousDate = (dateString: string): string => {
+  const date = new Date(dateString)
+  date.setDate(date.getDate() - 1)
+  return date.toISOString().split('T')[0]
+}
+
+// Helper function to get today's date in YYYY-MM-DD format
+const getTodayDate = (): string => {
+  return new Date().toISOString().split('T')[0]
+}
+
+// Helper function to format time (e.g., "10:44 AM")
+const formatTime = (timeString: string): string => {
+  const date = new Date(timeString)
+  return date.toLocaleTimeString('en-US', { 
+    hour: 'numeric', 
+    minute: '2-digit', 
+    hour12: true 
+  })
+}
+
+// Default nutrition goals - could be fetched from user profile in a real app
+const DEFAULT_GOALS = {
+  protein: 150,
+  carbs: 200,
+  fat: 65,
+  calories: 2000,
+}
+
 interface MealData {
-  id: number
+  id: string
   mealName: string
   protein: number
   carbs: number
@@ -300,62 +99,155 @@ interface DayData {
   fatConsumed: number
   fatGoal: number
   totalCaloriesConsumed: number
-  calorieGoal: number // Add total calorie goal for the day
+  calorieGoal: number
 }
 
-export const HomeScreen = ({ onFooterVisibilityChange, onSettingsPress, customBackground }) => {
+export const HomeScreen = ({ onFooterVisibilityChange, onSettingsPress, customBackground, navigation }) => {
   const [imageError, setImageError] = useState(false)
   const [displayedDaysData, setDisplayedDaysData] = useState<DayData[]>([])
-  const [nextDayToLoadIndex, setNextDayToLoadIndex] = useState(0)
+  const [loadedDates, setLoadedDates] = useState<string[]>([])
+  const [isLoading, setIsLoading] = useState(true)
   const [selectedMeal, setSelectedMeal] = useState<MealData | null>(null)
   const [showMealEdit, setShowMealEdit] = useState(false)
+  const [preventFooter, setPreventFooter] = useState(false)
+  const footerAnim = useRef(new Animated.Value(0)).current
   const { user } = useAuth()
 
-  // --- Initial Day Setup ---
+  // Load today's meals initially
   useEffect(() => {
-    // Calculate totals for the initial day
-    const todayTotals = calculateDailyTotals(todayMealData)
-    const todayCalorieGoal = 2000 // Example goal for today
-    const todayProteinGoal = 150
-    const todayCarbsGoal = 100
-    const todayFatGoal = 45
-
-    const initialDay: DayData = {
-      date: "Friday, Mar 14", // Assuming today is this date
-      mealData: todayMealData,
-      ...todayTotals,
-      proteinGoal: todayProteinGoal,
-      carbsGoal: todayCarbsGoal,
-      fatGoal: todayFatGoal,
-      calorieGoal: todayCalorieGoal,
+    if (user) {
+      loadMealsForDate(getTodayDate())
     }
-    setDisplayedDaysData([initialDay])
-  }, [])
+  }, [user])
 
+  // Handle footer visibility changes from scroll
+  const handleFooterVisibility = (visible: boolean) => {
+    // Always keep the footer visible on the home screen
+    if (onFooterVisibilityChange) {
+      onFooterVisibilityChange(true);
+    }
+  }
+
+  // Listen for navigation events
   useEffect(() => {
-    onFooterVisibilityChange(true)
-  }, [])
+    let unsubscribeFocus;
+    
+    if (navigation && navigation.addListener) {
+      unsubscribeFocus = navigation.addListener('focus', () => {
+        // Wait until navigation completes before allowing footer to show again
+        setTimeout(() => {
+          setPreventFooter(false);
+        }, 300);
+      });
+    }
+
+    return () => {
+      if (unsubscribeFocus && typeof unsubscribeFocus.remove === 'function') {
+        unsubscribeFocus.remove();
+      }
+    };
+  }, [navigation]);
+
+  // Navigate to log meal screen
+  const handleNavigateToLogMeal = () => {
+    // Lock footer in hidden state
+    setPreventFooter(true)
+    
+    // Hide footer with animation
+    Animated.spring(footerAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 20,
+      friction: 7
+    }).start()
+    
+    // Navigate after animation starts
+    setTimeout(() => {
+      navigation.navigate('LogMeal')
+    }, 50)
+  }
+
+  // Load meals for a specific date
+  const loadMealsForDate = async (dateString: string) => {
+    if (!user) return
+    
+    try {
+      setIsLoading(true)
+      
+      // Fetch meals for this date from Firebase
+      const meals = await getMealsByDate(user.uid, dateString)
+      
+      // Calculate totals
+      const dailyTotals = calculateDailyTotals(meals)
+      
+      // Format meals for the component
+      const formattedMeals = meals.map(meal => ({
+        id: meal.id,
+        mealName: meal.mealName,
+        protein: meal.protein,
+        carbs: meal.carbs,
+        fat: meal.fat,
+        calories: meal.calories,
+        sugar: meal.sugar || 0,
+        fibers: meal.fibers || 0,
+        sodium: meal.sodium || 0,
+        loggedTime: meal.loggedTime ? formatTime(meal.loggedTime) : "12:00 PM",
+        date: formatDate(dateString),
+        imageUrl: meal.imageUrl || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=400"
+      }))
+      
+      // Create the day data
+      const dayData: DayData = {
+        date: formatDate(dateString),
+        mealData: formattedMeals,
+        ...dailyTotals,
+        proteinGoal: DEFAULT_GOALS.protein,
+        carbsGoal: DEFAULT_GOALS.carbs,
+        fatGoal: DEFAULT_GOALS.fat,
+        calorieGoal: DEFAULT_GOALS.calories,
+      }
+      
+      // Add to displayed days
+      setDisplayedDaysData(prevDays => {
+        // If we already loaded this date, replace it
+        if (loadedDates.includes(dateString)) {
+          return prevDays.map(day => 
+            day.date === formatDate(dateString) ? dayData : day
+          )
+        }
+        // Otherwise add it to the list
+        return [...prevDays, dayData]
+      })
+      
+      // Keep track of loaded dates
+      setLoadedDates(prev => {
+        if (!prev.includes(dateString)) {
+          return [...prev, dateString]
+        }
+        return prev
+      })
+      
+    } catch (error) {
+      console.error("Error loading meals for date:", error)
+      Alert.alert("Error", "Failed to load meals")
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   const handleLoadPreviousDay = () => {
-    if (nextDayToLoadIndex < historicalDays.length) {
-      const previousDayInfo = historicalDays[nextDayToLoadIndex]
-      const previousDayTotals = calculateDailyTotals(previousDayInfo.mealData)
-
-      const dayToAdd: DayData = {
-        date: previousDayInfo.date,
-        mealData: previousDayInfo.mealData,
-        ...previousDayTotals,
-        proteinGoal: previousDayInfo.proteinGoal,
-        carbsGoal: previousDayInfo.carbsGoal,
-        fatGoal: previousDayInfo.fatGoal,
-        calorieGoal: previousDayInfo.calorieGoal,
-      }
-
-      setDisplayedDaysData((prevDays) => [...prevDays, dayToAdd])
-      setNextDayToLoadIndex(nextDayToLoadIndex + 1)
-    } else {
-      Alert.alert("No More Data", "No more historical meal data available.")
-    }
+    // Find the oldest date we've loaded
+    if (loadedDates.length === 0) return
+    
+    // Sort dates to find the oldest one
+    const sortedDates = [...loadedDates].sort()
+    const oldestDate = sortedDates[0]
+    
+    // Get the previous date
+    const previousDate = getPreviousDate(oldestDate)
+    
+    // Load meals for the previous date
+    loadMealsForDate(previousDate)
   }
 
   const handleMealPress = (meal: MealData) => {
@@ -368,17 +260,41 @@ export const HomeScreen = ({ onFooterVisibilityChange, onSettingsPress, customBa
     setShowMealEdit(false)
   }
 
-  const handleSaveMeal = (updatedMeal: Meal) => {
-    console.log("Saving meal:", updatedMeal)
-    // Here you would update the meal in your data source
-    // For now, we'll just close the edit screen
-    handleCloseMealEdit()
+  const handleSaveMeal = async (updatedMeal: Meal) => {
+    try {
+      // Update the meal in Firebase
+      await updateMeal(updatedMeal.id, updatedMeal)
+      
+      // Get the date from the meal to update the correct day
+      const mealDate = updatedMeal.date?.includes('-') 
+        ? updatedMeal.date 
+        : getTodayDate() // Default to today if not in YYYY-MM-DD format
+      
+      // Reload meals for the affected date
+      await loadMealsForDate(mealDate)
+      
+      // Close edit screen
+      handleCloseMealEdit()
+      
+      // Show success message
+      Alert.alert("Success", "Meal updated successfully")
+    } catch (error) {
+      console.error("Error saving meal:", error)
+      Alert.alert("Error", "Failed to update meal")
+    }
   }
 
   // Convert MealData to Meal type for MealEditScreen
   const convertToMealType = (mealData: MealData): Meal => {
+    // Extract the YYYY-MM-DD date from the formatted date if needed
+    const dateMatch = mealData.date.match(/\w+, \w+ (\d+)/)
+    const day = dateMatch ? dateMatch[1] : new Date().getDate().toString()
+    const month = new Date().getMonth() + 1
+    const year = new Date().getFullYear()
+    const isoDate = `${year}-${month.toString().padStart(2, '0')}-${day.padStart(2, '0')}`
+    
     return {
-      id: mealData.id.toString(),
+      id: mealData.id,
       userId: user?.uid || "",
       mealName: mealData.mealName,
       protein: mealData.protein,
@@ -389,16 +305,22 @@ export const HomeScreen = ({ onFooterVisibilityChange, onSettingsPress, customBa
       fibers: mealData.fibers,
       sodium: mealData.sodium,
       loggedTime: mealData.loggedTime,
-      date: mealData.date,
+      date: isoDate,
       imageUrl: mealData.imageUrl,
       createdAt: new Date() as any,
       updatedAt: new Date() as any,
     }
   }
 
+  // Calculate footer transform based on animation value
+  const footerTranslateY = footerAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, height * 0.15]
+  })
+
   return (
     <View style={styles.container}>
-      {/* --- Background Elements --- */}
+      {/* Background Elements */}
       {customBackground && (
         <ImageBackground source={{ uri: customBackground }} blurRadius={8} style={styles.imgBackground}>
           <View style={[{ backgroundColor: "rgba(0,0,0,0.4)", flex: 1 }]} />
@@ -409,9 +331,9 @@ export const HomeScreen = ({ onFooterVisibilityChange, onSettingsPress, customBa
       <View style={styles.backgroundShape3} />
       <View style={styles.backgroundShape5} />
 
-      {/* --- Top UI Elements --- */}
+      {/* Top UI Elements */}
       <View style={styles.topLeft}>
-        <Text style={styles.name}>Kekke steen</Text>
+        <Text style={styles.name}>{user?.displayName || "User"}</Text>
         <View style={styles.heartsContainer}>
           {[...Array(5)].map((_, i) => (
             <HeartIcon
@@ -458,8 +380,8 @@ export const HomeScreen = ({ onFooterVisibilityChange, onSettingsPress, customBa
           daysData={displayedDaysData}
           onLoadPreviousDay={handleLoadPreviousDay}
           onMealPress={handleMealPress}
-          onFooterVisibilityChange={onFooterVisibilityChange}
-          canLoadMore={nextDayToLoadIndex < historicalDays.length}
+          onFooterVisibilityChange={handleFooterVisibility}
+          canLoadMore={true}
         />
       </View>
 

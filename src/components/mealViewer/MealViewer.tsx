@@ -6,7 +6,7 @@ const { height } = Dimensions.get("window");
 
 // --- Interfaces (Make sure these match HomeScreen) ---
 interface MealData {
-  id: number;
+  id: string;
   mealName: string;
   protein: number;
   carbs: number;
@@ -58,19 +58,18 @@ export const MealViewer: React.FC<MealViewerProps> = ({
   const bottomSheetHeight = height * bottomSheetVisibleHeightRatio; // Actual height of the scrollable wrapper
   const firstTopContainerOffset = bottomSheetHeight * topContainerMarginTopRatio; // Calculate the offset where the first container starts
 
-  // *** FIX: Restore the original logic for showing the top shadow ***
   // Show shadow when scroll position goes beyond the initial top offset of the *first* summary container
   const shouldShowTopShadow = scrollPosition > firstTopContainerOffset;
 
   const handleScroll = (event: any) => {
     const offsetY = event.nativeEvent.contentOffset.y;
-    onFooterVisibilityChange(offsetY < 5); // Keep footer visible only at the very top
+    // Don't change footer visibility based on scroll
     setScrollPosition(offsetY);
   };
 
+  // Always keep footer visible
   useEffect(() => {
     onFooterVisibilityChange(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const calculateRemainingCalories = (consumed: number, goal: number): string => {

@@ -1,9 +1,10 @@
 "use client"
 
-import type React from "react"
-import { useState } from "react"
-import { View, Text, TouchableOpacity, FlatList, StyleSheet, Dimensions, Modal, Image } from "react-native"
+import React, { useState, useEffect } from "react"
+import { View, Text, TouchableOpacity, FlatList, StyleSheet, Dimensions, Modal, Image, ActivityIndicator } from "react-native"
 import { MaterialCommunityIcons } from "@expo/vector-icons"
+import { auth } from "../../config/firebase"
+import { getSavedMealsByUserId, deleteMeal, Meal } from "../../services/mealService"
 
 const { width, height } = Dimensions.get("window")
 
@@ -24,62 +25,107 @@ interface SavedMealsScreenProps {
 }
 
 export const SavedMealsScreen: React.FC<SavedMealsScreenProps> = ({ onClose, onSelectMeal }) => {
-  // Mock data for saved meals
-  const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([
-    {
-      id: "1",
-      name: "Chicken & Rice Bowl",
-      protein: 35,
-      carbs: 45,
-      fat: 12,
-      calories: 430,
-      imageUrl: "https://via.placeholder.com/80",
-      lastUsed: "2 days ago",
-    },
-    {
-      id: "2",
-      name: "Protein Smoothie",
-      protein: 25,
-      carbs: 30,
-      fat: 5,
-      calories: 270,
-      imageUrl: "https://via.placeholder.com/80",
-      lastUsed: "Yesterday",
-    },
-    {
-      id: "3",
-      name: "Avocado Toast",
-      protein: 12,
-      carbs: 35,
-      fat: 15,
-      calories: 320,
-      imageUrl: "https://via.placeholder.com/80",
-      lastUsed: "3 days ago",
-    },
-    {
-      id: "4",
-      name: "Greek Yogurt with Berries",
-      protein: 18,
-      carbs: 25,
-      fat: 8,
-      calories: 240,
-      imageUrl: "https://via.placeholder.com/80",
-      lastUsed: "1 week ago",
-    },
-    {
-      id: "5",
-      name: "Salmon & Vegetables",
-      protein: 30,
-      carbs: 20,
-      fat: 18,
-      calories: 360,
-      imageUrl: "https://via.placeholder.com/80",
-      lastUsed: "5 days ago",
-    },
-  ])
+  const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [visible, setVisible] = useState(true)
+  
+  useEffect(() => {
+    if (visible) {
+      fetchSavedMeals()
+    }
+  }, [visible])
+  
+  // When the component mounts, set visible to true to trigger fetching
+  useEffect(() => {
+    setVisible(true)
+    return () => {
+      setVisible(false)
+    }
+  }, [])
 
-  const handleDeleteMeal = (id: string) => {
-    setSavedMeals(savedMeals.filter((meal) => meal.id !== id))
+  const fetchSavedMeals = async () => {
+    try {
+      setLoading(true)
+      const currentUser = auth.currentUser
+      
+      if (!currentUser) {
+        throw new Error('User not authenticated')
+      }
+      
+      const meals = await getSavedMealsByUserId(currentUser.uid)
+      
+      // Transform Firestore meals to SavedMeal format
+      const transformedMeals = meals.map(meal => ({
+        id: meal.id,
+        name: meal.mealName,
+        protein: meal.protein,
+        carbs: meal.carbs,
+        fat: meal.fat,
+        calories: meal.calories,
+        imageUrl: meal.imageUrl || 'https://via.placeholder.com/80',
+        lastUsed: meal.lastUsed ? formatLastUsed(meal.lastUsed) : undefined
+      }))
+      
+      setSavedMeals(transformedMeals)
+      setError(null)
+    } catch (err) {
+      console.error('Error fetching saved meals:', err)
+      setError('Failed to load saved meals')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const formatLastUsed = (timestamp: any): string => {
+    if (!timestamp) return ''
+    
+    try {
+      const date = timestamp.toDate()
+      const now = new Date()
+      const diffTime = Math.abs(now.getTime() - date.getTime())
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+      
+      if (diffDays === 0) return 'Today'
+      if (diffDays === 1) return 'Yesterday'
+      if (diffDays < 7) return `${diffDays} days ago`
+      if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`
+      return `${Math.floor(diffDays / 30)} months ago`
+    } catch (err) {
+      return ''
+    }
+  }
+
+  const handleDeleteMeal = async (id: string) => {
+    try {
+      await deleteMeal(id)
+      setSavedMeals(savedMeals.filter((meal) => meal.id !== id))
+    } catch (err) {
+      console.error('Error deleting meal:', err)
+      setError('Failed to delete meal')
+    }
+  }
+
+  if (loading) {
+    return (
+      <Modal animationType="slide" transparent={true} visible={true} onRequestClose={onClose}>
+        <View style={styles.centeredView}>
+          <View style={styles.modalView}>
+            <View style={styles.header}>
+              <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                <MaterialCommunityIcons name="close" size={24} color="#EDEDED" />
+              </TouchableOpacity>
+              <Text style={styles.headerTitle}>Saved Meals</Text>
+              <View style={{ width: 40 }} />
+            </View>
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#3E92CC" />
+              <Text style={styles.loadingText}>Loading saved meals...</Text>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    )
   }
 
   return (
@@ -94,7 +140,17 @@ export const SavedMealsScreen: React.FC<SavedMealsScreenProps> = ({ onClose, onS
             <View style={{ width: 40 }} />
           </View>
 
-          {savedMeals.length === 0 ? (
+          {error && (
+            <View style={styles.errorContainer}>
+              <MaterialCommunityIcons name="alert-circle" size={24} color="#FF3B30" />
+              <Text style={styles.errorText}>{error}</Text>
+              <TouchableOpacity onPress={fetchSavedMeals} style={styles.retryButton}>
+                <Text style={styles.retryText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {!error && savedMeals.length === 0 ? (
             <View style={styles.emptyContainer}>
               <MaterialCommunityIcons name="food-off" size={60} color="#A0A0A0" />
               <Text style={styles.emptyText}>No saved meals found</Text>
@@ -108,7 +164,12 @@ export const SavedMealsScreen: React.FC<SavedMealsScreenProps> = ({ onClose, onS
               renderItem={({ item }) => (
                 <TouchableOpacity style={styles.mealItem} onPress={() => onSelectMeal(item)}>
                   <View style={styles.mealItemContent}>
-                    <Image source={{ uri: item.imageUrl }} style={styles.mealImage} />
+                    <Image 
+                      source={{ 
+                        uri: item.imageUrl || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=400"
+                      }} 
+                      style={styles.mealImage} 
+                    />
                     <View style={styles.mealInfo}>
                       <Text style={styles.mealName}>{item.name}</Text>
                       <Text style={styles.mealMacros}>
@@ -203,13 +264,13 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   mealCalories: {
-    color: "#D93036",
+    color: "#3E92CC",
     fontSize: 14,
     fontWeight: "500",
     marginBottom: 2,
   },
   lastUsed: {
-    color: "#A0A0A0",
+    color: "#707070",
     fontSize: 12,
     fontStyle: "italic",
   },
@@ -217,7 +278,7 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
   deleteButton: {
-    padding: 5,
+    padding: 8,
   },
   emptyContainer: {
     flex: 1,
@@ -230,12 +291,43 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "600",
     marginTop: 20,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   emptySubtext: {
     color: "#A0A0A0",
     fontSize: 14,
     textAlign: "center",
-    maxWidth: "80%",
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingText: {
+    color: "#EDEDED",
+    fontSize: 16,
+    marginTop: 12,
+  },
+  errorContainer: {
+    padding: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  errorText: {
+    color: "#FF3B30",
+    fontSize: 16,
+    textAlign: "center",
+    marginVertical: 10,
+  },
+  retryButton: {
+    backgroundColor: "#3E92CC",
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginTop: 10,
+  },
+  retryText: {
+    color: "#FFFFFF",
+    fontWeight: "600",
   },
 })
