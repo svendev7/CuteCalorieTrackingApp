@@ -13,15 +13,19 @@ import {
   Animated,
   Keyboard,
   SafeAreaView,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
-import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, Ionicons, AntDesign } from '@expo/vector-icons';
+import { auth } from '../../config/firebase';
+import { saveCustomFood } from '../../services/mealService';
 
 const { width, height } = Dimensions.get('window');
 
 // Define a type for the food item (can be expanded)
 interface CustomFood {
   id?: string; // Optional for new items
-  mealName: string;
+  name: string; // Changed from mealName to match backend
   protein: number;
   carbs: number;
   fat: number;
@@ -29,6 +33,7 @@ interface CustomFood {
   sugar: number;
   fibers: number;
   sodium: number;
+  servingSize: number; // Added serving size in grams
   imageUrl?: string;
   isFavorite: boolean;
 }
@@ -43,6 +48,7 @@ export const AddCustomFoodScreen: React.FC<AddCustomFoodScreenProps> = ({ naviga
   const isEditing = !!foodToEdit; // Check if we are in edit mode
   const scrollViewRef = useRef<ScrollView>(null);
   const contentOffset = useRef(new Animated.Value(0)).current;
+  const [isLoading, setIsLoading] = useState(false);
 
   // Initialize with default/empty values or existing food data
   const [foodDetails, setFoodDetails] = useState<CustomFood>(() => {
@@ -50,7 +56,7 @@ export const AddCustomFoodScreen: React.FC<AddCustomFoodScreenProps> = ({ naviga
       return { ...foodToEdit };
     } 
     return {
-      mealName: '',
+      name: '',
       protein: 0,
       carbs: 0,
       fat: 0,
@@ -58,6 +64,7 @@ export const AddCustomFoodScreen: React.FC<AddCustomFoodScreenProps> = ({ naviga
       sugar: 0,
       fibers: 0,
       sodium: 0,
+      servingSize: 100, // Default to 100g
       isFavorite: false,
     };
   });
@@ -72,6 +79,7 @@ export const AddCustomFoodScreen: React.FC<AddCustomFoodScreenProps> = ({ naviga
         sugar: foodToEdit.sugar.toString(),
         fibers: foodToEdit.fibers.toString(),
         sodium: foodToEdit.sodium.toString(),
+        servingSize: (foodToEdit.servingSize || 100).toString(),
       };
     }
     return {
@@ -82,13 +90,20 @@ export const AddCustomFoodScreen: React.FC<AddCustomFoodScreenProps> = ({ naviga
       sugar: '',
       fibers: '',
       sodium: '',
+      servingSize: '100', // Default to 100g
     };
   });
 
   // Effect to update state if route params change (though usually modal params don't change while open)
   useEffect(() => {
-    if (isEditing) {
-      setFoodDetails({ ...foodToEdit });
+    if (isEditing && foodToEdit) {
+      setFoodDetails({ 
+        ...foodToEdit,
+        // Ensure the property name is correct 
+        name: foodToEdit.name || (foodToEdit as any).mealName || '',
+        servingSize: foodToEdit.servingSize || 100
+      });
+      
       setInputValues({
         protein: foodToEdit.protein.toString(),
         carbs: foodToEdit.carbs.toString(),
@@ -97,8 +112,9 @@ export const AddCustomFoodScreen: React.FC<AddCustomFoodScreenProps> = ({ naviga
         sugar: foodToEdit.sugar.toString(),
         fibers: foodToEdit.fibers.toString(),
         sodium: foodToEdit.sodium.toString(),
+        servingSize: (foodToEdit.servingSize || 100).toString(),
       });
-    } // Reset if needed? Might not be necessary for this modal flow.
+    }
   }, [foodToEdit, isEditing]);
 
   const handleInputFocus = () => {
@@ -110,10 +126,14 @@ export const AddCustomFoodScreen: React.FC<AddCustomFoodScreenProps> = ({ naviga
     }).start();
   };
 
-  const handleInputBlur = (field: keyof Omit<CustomFood, 'mealName' | 'imageUrl' | 'isFavorite' | 'id'>) => {
-    // Set input to '0' if it's empty on blur
+  const handleInputBlur = (field: string) => {
+    // Set input to '0' if it's empty on blur (except for serving size which should be at least 1)
     if (inputValues[field] === '') {
-      setInputValues(prev => ({ ...prev, [field]: '0' }));
+      if (field === 'servingSize') {
+        setInputValues(prev => ({ ...prev, [field]: '1' }));
+      } else {
+        setInputValues(prev => ({ ...prev, [field]: '0' }));
+      }
     }
     
     // Animate content back down
@@ -124,29 +144,69 @@ export const AddCustomFoodScreen: React.FC<AddCustomFoodScreenProps> = ({ naviga
     }).start();
   };
 
-  const handleSave = () => {
-    console.log(isEditing ? 'Updating Custom Food:' : 'Saving Custom Food:', foodDetails);
-    // Add logic to SAVE OR UPDATE the food item 
-    // If isEditing, you might need to pass the updated food back or trigger a refresh
-    navigation.goBack(); // Go back after saving/updating
+  const handleSave = async () => {
+    // Validate inputs
+    if (!foodDetails.name.trim()) {
+      Alert.alert('Error', 'Please enter a food name');
+      return;
+    }
+    
+    // Ensure serving size is at least 1g
+    if (!foodDetails.servingSize || foodDetails.servingSize < 1) {
+      setFoodDetails(prev => ({ ...prev, servingSize: 1 }));
+      setInputValues(prev => ({ ...prev, servingSize: '1' }));
+    }
+
+    setIsLoading(true);
+    
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        throw new Error('User not authenticated');
+      }
+      
+      // Prepare food data for saving
+      const foodData = {
+        ...foodDetails,
+        // Ensure name property is set (not mealName)
+        name: foodDetails.name,
+        // Add user creation metadata
+        isUserCreated: true,
+        isFavorite: foodDetails.isFavorite
+      };
+      
+      // Save to Firestore
+      await saveCustomFood(currentUser.uid, foodData);
+      
+      // Show success message
+      Alert.alert(
+        'Success', 
+        isEditing ? 'Food updated successfully' : 'Food added successfully',
+        [{ text: 'OK', onPress: () => navigation.goBack() }]
+      );
+    } catch (error) {
+      console.error('Error saving food:', error);
+      Alert.alert('Error', 'Failed to save food. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleInputChange = (field: keyof CustomFood, value: string | number | boolean) => {
+  const handleInputChange = (field: string, value: string | number | boolean) => {
     // Handle numeric fields separately to manage string input state
-    if (typeof value === 'string' && ['protein', 'carbs', 'fat', 'calories', 'sugar', 'fibers', 'sodium'].includes(field as string)) {
+    if (typeof value === 'string' && ['protein', 'carbs', 'fat', 'calories', 'sugar', 'fibers', 'sodium', 'servingSize'].includes(field)) {
       setInputValues(prev => ({ ...prev, [field]: value }));
       
       // Update the actual numeric value in foodDetails
-      const numberValue = value === '' ? 0 : Number.parseInt(value, 10);
+      const numberValue = value === '' ? 0 : Number.parseFloat(value);
       if (!isNaN(numberValue)) {
         setFoodDetails(prev => ({ ...prev, [field]: numberValue }));
       }
     } else if (field === 'isFavorite' && typeof value === 'boolean') {
       setFoodDetails(prev => ({ ...prev, [field]: value }));
-    } else if (field === 'mealName' && typeof value === 'string') {
+    } else if (field === 'name' && typeof value === 'string') {
       setFoodDetails(prev => ({ ...prev, [field]: value }));
     }
-    // Add handling for other fields like imageUrl if needed
   };
 
   const toggleFavorite = () => {
@@ -185,23 +245,50 @@ export const AddCustomFoodScreen: React.FC<AddCustomFoodScreenProps> = ({ naviga
               <TouchableOpacity style={styles.changeImageButton}>
                 <Text style={styles.changeImageText}>{isEditing ? 'Change Image' : 'Add Image'}</Text>
               </TouchableOpacity>
+              
+              {/* Favorite Toggle */}
+              <TouchableOpacity 
+                style={styles.favoriteButton} 
+                onPress={toggleFavorite}
+              >
+                <AntDesign 
+                  name={foodDetails.isFavorite ? "star" : "staro"} 
+                  size={24} 
+                  color={foodDetails.isFavorite ? "#FFD700" : "#FFFFFF"} 
+                />
+              </TouchableOpacity>
             </View>
 
             {/* Form Section */}
             <View style={styles.formSection}>
               <Text style={styles.sectionTitle}>Food Details</Text>
 
-              {/* Meal Name Input */}
+              {/* Food Name Input */}
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Food Name</Text>
                 <TextInput
                   style={styles.textInput}
-                  value={foodDetails.mealName}
-                  onChangeText={(text) => handleInputChange('mealName', text)}
+                  value={foodDetails.name}
+                  onChangeText={(text) => handleInputChange('name', text)}
                   placeholder="Enter food name"
                   placeholderTextColor="#666666"
                   onFocus={handleInputFocus}
-                  onBlur={() => handleInputBlur('calories')}
+                  onBlur={() => handleInputBlur('name')}
+                />
+              </View>
+
+              {/* Serving Size Input */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Serving Size (g)</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={inputValues.servingSize}
+                  onChangeText={(text) => handleInputChange('servingSize', text)}
+                  onBlur={() => handleInputBlur('servingSize')}
+                  onFocus={handleInputFocus}
+                  keyboardType="numeric"
+                  placeholder="100"
+                  placeholderTextColor="#666666"
                 />
               </View>
 
@@ -308,22 +395,18 @@ export const AddCustomFoodScreen: React.FC<AddCustomFoodScreenProps> = ({ naviga
             </View>
           </Animated.View>
         </ScrollView>
-        
-        {/* Footer with Save & Favorite Buttons */}
-        <View style={styles.footer}>
-          <TouchableOpacity
-            style={[styles.favoriteButton, foodDetails.isFavorite && styles.favoriteButtonActive]}
-            onPress={toggleFavorite}
-          >
-            <MaterialCommunityIcons 
-              name={foodDetails.isFavorite ? "star" : "star-outline"} 
-              size={24} 
-              color="#FFFFFF"
-            />
-          </TouchableOpacity>
 
-          <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-            <Text style={styles.saveButtonText}>{isEditing ? 'Update Food' : 'Save Food'}</Text>
+        <View style={styles.footer}>
+          <TouchableOpacity 
+            style={[styles.saveButton, isLoading && styles.disabledButton]} 
+            onPress={handleSave}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <Text style={styles.saveButtonText}>Save Food</Text>
+            )}
           </TouchableOpacity>
         </View>
       </View>
@@ -454,16 +537,16 @@ const styles = StyleSheet.create({
     paddingBottom: Platform.OS === 'ios' ? 10 : 15, // Extra padding for iOS
   },
   favoriteButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#FFCC00',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
+    position: 'absolute',
+    top: 15,
+    right: 15,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 20,
+    padding: 8,
+    zIndex: 10,
   },
-  favoriteButtonActive: {
-    backgroundColor: '#FFCC00',
+  disabledButton: {
+    opacity: 0.7,
   },
   saveButton: {
     flex: 1,

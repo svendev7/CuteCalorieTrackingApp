@@ -1,256 +1,379 @@
-import React, { useRef, useState, useEffect } from 'react';
-import { 
-  View, 
-  TouchableOpacity, 
-  Text, 
-  StyleSheet, 
-  Animated, 
-  Dimensions,
-  Easing
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+"use client"
 
-const { width, height } = Dimensions.get('window');
+import type React from "react"
+import { useState, useEffect, useRef } from "react"
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing, Dimensions } from "react-native"
+import { Ionicons } from "@expo/vector-icons"
 
-// App colors from HomeStyles.ts
+const { width } = Dimensions.get("window")
+
+// App colors
 const COLORS = {
-  background: '#1C1C1E',
-  accent: '#06D6A0',
-  text: '#FFFFFF',
-  shadow: 'rgba(0, 0, 0, 0.3)'
-};
-
-interface AnimatedFooterProps {
-  isVisible: boolean;
-  onAddPress?: () => void;
-  onRocketPress?: () => void;
-  onStatsPress?: () => void;
+  background: "#1C1C1E",
+  accent: "#06D6A0",
+  text: "#FFFFFF",
+  shadow: "rgba(0, 0, 0, 0.3)",
+  border: "rgba(6, 214, 160, 0.5)",
 }
 
-const AnimatedFooter: React.FC<AnimatedFooterProps> = ({ 
-  isVisible, 
+interface AnimatedFooterProps {
+  isVisible: boolean
+  activeTab?: string
+  onAddPress?: () => void
+  onRocketPress?: () => void
+  onStatsPress?: () => void
+  onQuickAddPress?: () => void
+}
+
+const AnimatedFooter: React.FC<AnimatedFooterProps> = ({
+  isVisible = true,
+  activeTab,
   onAddPress,
-  onRocketPress, 
-  onStatsPress 
+  onRocketPress,
+  onStatsPress,
+  onQuickAddPress,
 }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const rotateAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideOutAnim = useRef(new Animated.Value(0)).current;
-  const footerVisibilityAnim = useRef(new Animated.Value(isVisible ? 0 : 100)).current;
-  
-  // Animation for toggling the menu
-  const toggleMenu = () => {
-    const toValue = isOpen ? 0 : 1;
-    
-    // Start multiple animations together
-    Animated.parallel([
-      // Rotate plus to cross
-      Animated.timing(rotateAnim, {
-        toValue,
-        duration: 300,
-        easing: Easing.bezier(0.4, 0.0, 0.2, 1),
-        useNativeDriver: true,
-      }),
-      // Scale and fade menu items
-      Animated.timing(scaleAnim, {
-        toValue,
-        duration: 300,
-        easing: Easing.bezier(0.4, 0.0, 0.2, 1),
-        useNativeDriver: true,
-      }),
-      // Fade menu items
-      Animated.timing(fadeAnim, {
-        toValue,
-        duration: 300,
-        easing: Easing.bezier(0.4, 0.0, 0.2, 1),
-        useNativeDriver: true,
-      }),
-    ]).start();
-    
-    setIsOpen(!isOpen);
-  };
+  const [isOpen, setIsOpen] = useState(false)
+  const [previousTab, setPreviousTab] = useState(activeTab)
 
-  // Animation for footer visibility
+  // Animation values
+  const rotateAnim = useRef(new Animated.Value(0)).current
+  const buttonScaleAnim = useRef(new Animated.Value(1)).current
+  const footerVisibilityAnim = useRef(new Animated.Value(isVisible ? 0 : 100)).current
+  const footerOpacityAnim = useRef(new Animated.Value(isVisible ? 1 : 0)).current
+  const slideDirectionAnim = useRef(new Animated.Value(0)).current
+
+  // Menu item animations
+  const menuItem1Anim = useRef(new Animated.Value(0)).current
+  const menuItem2Anim = useRef(new Animated.Value(0)).current
+  const menuItem3Anim = useRef(new Animated.Value(0)).current
+
+  // Close menu when footer visibility changes
   useEffect(() => {
-    // Close the menu if it's open when hiding the footer
     if (!isVisible && isOpen) {
-      setIsOpen(false);
-      rotateAnim.setValue(0);
-      scaleAnim.setValue(0);
-      fadeAnim.setValue(0);
+      setIsOpen(false)
+      Animated.timing(rotateAnim, {
+        toValue: 0,
+        duration: 300,
+        easing: Easing.bezier(0.4, 0.0, 0.2, 1),
+        useNativeDriver: true,
+      }).start()
     }
 
-    // Animate the footer in or out
-    Animated.timing(footerVisibilityAnim, {
-      toValue: isVisible ? 0 : 100,
-      duration: 400,
-      easing: Easing.bezier(0.25, 0.1, 0.25, 1),
-      useNativeDriver: true,
-    }).start();
-  }, [isVisible]);
-  
-  // Animation for sliding the footer out of screen when pressing a button
-  const animateOut = (callback: () => void) => {
-    // First close the menu
-    if (isOpen) {
-      toggleMenu();
+    // Animate footer visibility
+    Animated.parallel([
+      Animated.timing(footerVisibilityAnim, {
+        toValue: isVisible ? 0 : 100,
+        duration: 400,
+        easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+        useNativeDriver: true,
+      }),
+      Animated.timing(footerOpacityAnim, {
+        toValue: isVisible ? 1 : 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start()
+  }, [isVisible])
+
+  // Track tab changes for animation direction
+  useEffect(() => {
+    if (activeTab !== previousTab && previousTab && activeTab) {
+      // Determine slide direction based on tab order
+      const tabOrder = ["home", "meals", "stats", "games", "profile"]
+      const prevIndex = tabOrder.indexOf(previousTab)
+      const currentIndex = tabOrder.indexOf(activeTab)
+
+      // Set direction value for animation
+      const direction = prevIndex < currentIndex ? 1 : -1
+
+      // Hide footer first
+      Animated.parallel([
+        Animated.timing(footerOpacityAnim, {
+          toValue: 0,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideDirectionAnim, {
+          toValue: -100 * direction,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        // Reset position and show with new direction
+        slideDirectionAnim.setValue(100 * direction)
+
+        Animated.parallel([
+          Animated.timing(footerOpacityAnim, {
+            toValue: 1,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+          Animated.timing(slideDirectionAnim, {
+            toValue: 0,
+            duration: 300,
+            easing: Easing.out(Easing.exp),
+            useNativeDriver: true,
+          }),
+        ]).start()
+      })
+
+      setPreviousTab(activeTab)
     }
-    
-    // Execute the callback immediately
-    callback();
-  };
+  }, [activeTab])
+
+  // Toggle menu animation
+  const toggleMenu = () => {
+    // Button press animation
+    Animated.sequence([
+      Animated.timing(buttonScaleAnim, {
+        toValue: 0.9,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(buttonScaleAnim, {
+        toValue: 1,
+        duration: 200,
+        easing: Easing.elastic(1.2),
+        useNativeDriver: true,
+      }),
+    ]).start()
+
+    // Rotate animation
+    Animated.timing(rotateAnim, {
+      toValue: isOpen ? 0 : 1,
+      duration: 300,
+      easing: Easing.bezier(0.4, 0.0, 0.2, 1),
+      useNativeDriver: true,
+    }).start()
+
+    // Menu items animations
+    const menuItems = [menuItem1Anim, menuItem2Anim, menuItem3Anim]
+
+    menuItems.forEach((anim, index) => {
+      Animated.timing(anim, {
+        toValue: isOpen ? 0 : 1,
+        duration: 300,
+        delay: isOpen ? 0 : index * 50,
+        easing: Easing.bezier(0.4, 0.0, 0.2, 1),
+        useNativeDriver: true,
+      }).start()
+    })
+
+    setIsOpen(!isOpen)
+  }
+
+  // Handle menu button press
+  const handleButtonPress = (callback?: () => void) => {
+    if (isOpen) {
+      toggleMenu()
+    }
+
+    if (callback) {
+      callback()
+    }
+  }
 
   // Calculate rotation for plus/cross animation
   const rotation = rotateAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: ['0deg', '135deg']
-  });
+    outputRange: ["0deg", "135deg"],
+  })
 
-  // Calculate footer visibility transform for sliding in/out of screen
-  const footerVisibilityTransform = {
-    transform: [
-      {
-        translateY: footerVisibilityAnim
-      }
-    ],
-    opacity: footerVisibilityAnim.interpolate({
-      inputRange: [0, 100],
-      outputRange: [1, 0]
-    })
-  };
-
-  // Handle menu button presses
-  const handleButtonPress = (action: () => void) => {
-    // Animate out
-    animateOut(action);
-  };
+  // Calculate shadow opacity based on menu state
+  const shadowOpacity = rotateAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.3, 0.5],
+  })
 
   return (
-    <Animated.View style={[styles.container, footerVisibilityTransform]}>
-      {/* Menu Items - Vertical layout DIRECTLY above button */}
-      <Animated.View style={[
-        styles.menuContainer,
+    <Animated.View
+      style={[
+        styles.container,
         {
-          opacity: fadeAnim,
-          transform: [
-            { scale: scaleAnim },
-            { translateY: fadeAnim.interpolate({
-              inputRange: [0, 1],
-              outputRange: [10, 0]
-            })}
-          ]
-        }
-      ]}>
-        {/* Log Meal Button */}
-        <TouchableOpacity 
-          style={styles.menuItem} 
-          onPress={() => handleButtonPress(onAddPress || (() => {}))}
-          activeOpacity={0.8}
-        >
-          <View style={styles.menuItemContent}>
-            <Ionicons name="fast-food" size={20} color={COLORS.accent} />
-            <Text style={styles.menuText}>Log Meal</Text>
-          </View>
-        </TouchableOpacity>
+          transform: [{ translateY: footerVisibilityAnim }, { translateX: slideDirectionAnim }],
+          opacity: footerOpacityAnim,
+        },
+      ]}
+    >
+      {/* Menu Items */}
+      {isOpen && (
+        <View style={styles.menuContainer}>
+          {/* Log Meal Button */}
+          <Animated.View
+            style={[
+              styles.menuItemContainer,
+              {
+                opacity: menuItem1Anim,
+                transform: [
+                  {
+                    scale: menuItem1Anim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.8, 1],
+                    }),
+                  },
+                  {
+                    translateY: menuItem1Anim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [20, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <TouchableOpacity style={styles.menuItem} onPress={() => handleButtonPress(onAddPress)} activeOpacity={0.8}>
+              <Text style={styles.menuText}>Log Meal</Text>
+              <Ionicons name="fast-food" size={20} color={COLORS.accent} />
+            </TouchableOpacity>
+          </Animated.View>
 
-        {/* Stats Button */}
-        <TouchableOpacity 
-          style={styles.menuItem} 
-          onPress={() => handleButtonPress(onStatsPress || (() => {}))}
-          activeOpacity={0.8}
-        >
-          <View style={styles.menuItemContent}>
-            <Ionicons name="stats-chart" size={20} color={COLORS.accent} />
-            <Text style={styles.menuText}>Stats</Text>
-          </View>
-        </TouchableOpacity>
+          {/* Stats Button */}
+          <Animated.View
+            style={[
+              styles.menuItemContainer,
+              {
+                opacity: menuItem2Anim,
+                transform: [
+                  {
+                    scale: menuItem2Anim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.8, 1],
+                    }),
+                  },
+                  {
+                    translateY: menuItem2Anim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [20, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => handleButtonPress(onStatsPress)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.menuText}>Stats</Text>
+              <Ionicons name="stats-chart" size={20} color={COLORS.accent} />
+            </TouchableOpacity>
+          </Animated.View>
 
-        {/* Rocket Button */}
-        <TouchableOpacity 
-          style={styles.menuItem} 
-          onPress={() => handleButtonPress(onRocketPress || (() => {}))}
-          activeOpacity={0.8}
-        >
-          <View style={styles.menuItemContent}>
-            <Ionicons name="rocket" size={20} color={COLORS.accent} />
-            <Text style={styles.menuText}>Games</Text>
-          </View>
-        </TouchableOpacity>
-      </Animated.View>
+          {/* Games Button */}
+          <Animated.View
+            style={[
+              styles.menuItemContainer,
+              {
+                opacity: menuItem3Anim,
+                transform: [
+                  {
+                    scale: menuItem3Anim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.8, 1],
+                    }),
+                  },
+                  {
+                    translateY: menuItem3Anim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [20, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => handleButtonPress(onRocketPress)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.menuText}>Games</Text>
+              <Ionicons name="rocket" size={20} color={COLORS.accent} />
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
+      )}
 
       {/* Toggle Button */}
-      <TouchableOpacity
-        style={styles.toggleButton}
-        onPress={toggleMenu}
-        activeOpacity={0.8}
+      <Animated.View
+        style={[
+          styles.toggleButtonContainer,
+          {
+            transform: [{ scale: buttonScaleAnim }],
+            shadowOpacity: shadowOpacity,
+          },
+        ]}
       >
-        <Animated.View style={{ transform: [{ rotate: rotation }] }}>
-          <Ionicons name="add" size={36} color={COLORS.text} />
-        </Animated.View>
-      </TouchableOpacity>
+        <TouchableOpacity style={styles.toggleButton} onPress={toggleMenu} activeOpacity={0.9}>
+          <Animated.View style={{ transform: [{ rotate: rotation }] }}>
+            <Ionicons name="add" size={36} color={COLORS.text} />
+          </Animated.View>
+        </TouchableOpacity>
+      </Animated.View>
     </Animated.View>
-  );
-};
+  )
+}
 
 const styles = StyleSheet.create({
   container: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 30,
     right: 30,
-    alignItems: 'center',
+    alignItems: "center",
     zIndex: 100,
   },
-  toggleButton: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: COLORS.accent,
-    justifyContent: 'center',
-    alignItems: 'center',
+  toggleButtonContainer: {
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 8,
     elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4.65,
+  },
+  toggleButton: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: COLORS.accent,
+    justifyContent: "center",
+    alignItems: "center",
     borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: "rgba(255, 255, 255, 0.2)",
   },
   menuContainer: {
-    position: 'absolute',
-    bottom: 75, // Direct placement above the button
+    position: "absolute",
+    bottom: 75,
     right: 0,
-    alignItems: 'center',
-    width: 120, // Fixed width for all menu items
+    alignItems: "flex-end",
+    width: 150,
+  },
+  menuItemContainer: {
+    width: "100%",
+    marginBottom: 8,
   },
   menuItem: {
-    width: '100%',
-    marginBottom: 5, // Tiny gap between items
-  },
-  menuItemContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     backgroundColor: COLORS.background,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
     borderRadius: 20,
     borderWidth: 1.5,
-    borderColor: COLORS.accent,
+    borderColor: COLORS.border,
     shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3,
     elevation: 3,
-    width: '100%',
+    width: "100%",
   },
   menuText: {
     color: COLORS.text,
-    fontWeight: 'bold',
-    marginLeft: 6,
+    fontWeight: "bold",
     fontSize: 14,
+    marginRight: 8,
   },
-});
+})
 
-export default AnimatedFooter; 
+export default AnimatedFooter

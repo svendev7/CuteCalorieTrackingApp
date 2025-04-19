@@ -1,17 +1,17 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import { View, Text, TouchableOpacity, Dimensions, Alert, ImageBackground, StyleSheet, Animated } from "react-native"
+import { View, Text, TouchableOpacity, Dimensions, Alert, ImageBackground, Animated } from "react-native"
 import { styles } from "./HomeStyles"
 import HeartIcon from "@assets/Heart.svg"
 import FlameIcon from "@assets/Vector.svg"
 import CogIcon from "@assets/Settings.svg"
 import StoreIcon from "@assets/Store.svg"
-import Plus from "@assets/Plus.svg"
 const { width, height } = Dimensions.get("window")
 import { PebblyPal } from "../../components/pebbly/PebblyPal"
 import { MealViewer } from "../../components/mealViewer/MealViewer"
 import { MealEditScreen } from "../meals/MealEditScreen"
+import AnimatedFooter from "../../components/footer/AnimatedFooter"
 import type { Meal } from "../../services/mealService"
 import { getMealsByDate, updateMeal } from "../../services/mealService"
 import { useAuth } from "../../hooks/useAuth"
@@ -36,33 +36,33 @@ const calculateDailyTotals = (meals: Meal[]) => {
 // Helper function to format date as "Day, Month Date" (e.g., "Friday, Mar 14")
 const formatDate = (dateString: string): string => {
   const date = new Date(dateString)
-  const options: Intl.DateTimeFormatOptions = { 
-    weekday: 'long', 
-    month: 'short', 
-    day: 'numeric' 
+  const options: Intl.DateTimeFormatOptions = {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
   }
-  return date.toLocaleDateString('en-US', options)
+  return date.toLocaleDateString("en-US", options)
 }
 
 // Helper function to get previous date
 const getPreviousDate = (dateString: string): string => {
   const date = new Date(dateString)
   date.setDate(date.getDate() - 1)
-  return date.toISOString().split('T')[0]
+  return date.toISOString().split("T")[0]
 }
 
 // Helper function to get today's date in YYYY-MM-DD format
 const getTodayDate = (): string => {
-  return new Date().toISOString().split('T')[0]
+  return new Date().toISOString().split("T")[0]
 }
 
 // Helper function to format time (e.g., "10:44 AM")
 const formatTime = (timeString: string): string => {
   const date = new Date(timeString)
-  return date.toLocaleTimeString('en-US', { 
-    hour: 'numeric', 
-    minute: '2-digit', 
-    hour12: true 
+  return date.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
   })
 }
 
@@ -110,6 +110,8 @@ export const HomeScreen = ({ onFooterVisibilityChange, onSettingsPress, customBa
   const [selectedMeal, setSelectedMeal] = useState<MealData | null>(null)
   const [showMealEdit, setShowMealEdit] = useState(false)
   const [preventFooter, setPreventFooter] = useState(false)
+  const [footerVisible, setFooterVisible] = useState(true)
+  const [activeTab, setActiveTab] = useState("home")
   const footerAnim = useRef(new Animated.Value(0)).current
   const { user } = useAuth()
 
@@ -122,66 +124,83 @@ export const HomeScreen = ({ onFooterVisibilityChange, onSettingsPress, customBa
 
   // Handle footer visibility changes from scroll
   const handleFooterVisibility = (visible: boolean) => {
-    // Always keep the footer visible on the home screen
+    // Update internal footer visibility state
+    setFooterVisible(visible && !preventFooter)
+
+    // Also call the parent's handler if it exists
     if (onFooterVisibilityChange) {
-      onFooterVisibilityChange(true);
+      onFooterVisibilityChange(visible && !preventFooter)
     }
   }
 
   // Listen for navigation events
   useEffect(() => {
-    let unsubscribeFocus;
-    
+    let unsubscribeFocus
+
     if (navigation && navigation.addListener) {
-      unsubscribeFocus = navigation.addListener('focus', () => {
+      unsubscribeFocus = navigation.addListener("focus", () => {
         // Wait until navigation completes before allowing footer to show again
         setTimeout(() => {
-          setPreventFooter(false);
-        }, 300);
-      });
+          setPreventFooter(false)
+          setFooterVisible(true)
+        }, 300)
+      })
     }
 
     return () => {
-      if (unsubscribeFocus && typeof unsubscribeFocus.remove === 'function') {
-        unsubscribeFocus.remove();
+      if (unsubscribeFocus && typeof unsubscribeFocus.remove === "function") {
+        unsubscribeFocus.remove()
       }
-    };
-  }, [navigation]);
+    }
+  }, [navigation])
 
   // Navigate to log meal screen
   const handleNavigateToLogMeal = () => {
     // Lock footer in hidden state
     setPreventFooter(true)
-    
-    // Hide footer with animation
-    Animated.spring(footerAnim, {
-      toValue: 1,
-      useNativeDriver: true,
-      tension: 20,
-      friction: 7
-    }).start()
-    
+    setFooterVisible(false)
+
     // Navigate after animation starts
     setTimeout(() => {
-      navigation.navigate('LogMeal')
+      navigation.navigate("LogMeal")
+    }, 50)
+  }
+
+  // Navigate to stats screen
+  const handleNavigateToStats = () => {
+    setPreventFooter(true)
+    setFooterVisible(false)
+
+    setTimeout(() => {
+      navigation.navigate("Stats")
+    }, 50)
+  }
+
+  // Navigate to games screen
+  const handleNavigateToGames = () => {
+    setPreventFooter(true)
+    setFooterVisible(false)
+
+    setTimeout(() => {
+      navigation.navigate("Games")
     }, 50)
   }
 
   // Load meals for a specific date
   const loadMealsForDate = async (dateString: string) => {
     if (!user) return
-    
+
     try {
       setIsLoading(true)
-      
+
       // Fetch meals for this date from Firebase
       const meals = await getMealsByDate(user.uid, dateString)
-      
+
       // Calculate totals
       const dailyTotals = calculateDailyTotals(meals)
-      
+
       // Format meals for the component
-      const formattedMeals = meals.map(meal => ({
+      const formattedMeals = meals.map((meal) => ({
         id: meal.id,
         mealName: meal.mealName,
         protein: meal.protein,
@@ -193,9 +212,9 @@ export const HomeScreen = ({ onFooterVisibilityChange, onSettingsPress, customBa
         sodium: meal.sodium || 0,
         loggedTime: meal.loggedTime ? formatTime(meal.loggedTime) : "12:00 PM",
         date: formatDate(dateString),
-        imageUrl: meal.imageUrl || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=400"
+        imageUrl: meal.imageUrl || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=400",
       }))
-      
+
       // Create the day data
       const dayData: DayData = {
         date: formatDate(dateString),
@@ -206,27 +225,24 @@ export const HomeScreen = ({ onFooterVisibilityChange, onSettingsPress, customBa
         fatGoal: DEFAULT_GOALS.fat,
         calorieGoal: DEFAULT_GOALS.calories,
       }
-      
+
       // Add to displayed days
-      setDisplayedDaysData(prevDays => {
+      setDisplayedDaysData((prevDays) => {
         // If we already loaded this date, replace it
         if (loadedDates.includes(dateString)) {
-          return prevDays.map(day => 
-            day.date === formatDate(dateString) ? dayData : day
-          )
+          return prevDays.map((day) => (day.date === formatDate(dateString) ? dayData : day))
         }
         // Otherwise add it to the list
         return [...prevDays, dayData]
       })
-      
+
       // Keep track of loaded dates
-      setLoadedDates(prev => {
+      setLoadedDates((prev) => {
         if (!prev.includes(dateString)) {
           return [...prev, dateString]
         }
         return prev
       })
-      
     } catch (error) {
       console.error("Error loading meals for date:", error)
       Alert.alert("Error", "Failed to load meals")
@@ -238,14 +254,14 @@ export const HomeScreen = ({ onFooterVisibilityChange, onSettingsPress, customBa
   const handleLoadPreviousDay = () => {
     // Find the oldest date we've loaded
     if (loadedDates.length === 0) return
-    
+
     // Sort dates to find the oldest one
     const sortedDates = [...loadedDates].sort()
     const oldestDate = sortedDates[0]
-    
+
     // Get the previous date
     const previousDate = getPreviousDate(oldestDate)
-    
+
     // Load meals for the previous date
     loadMealsForDate(previousDate)
   }
@@ -264,18 +280,16 @@ export const HomeScreen = ({ onFooterVisibilityChange, onSettingsPress, customBa
     try {
       // Update the meal in Firebase
       await updateMeal(updatedMeal.id, updatedMeal)
-      
+
       // Get the date from the meal to update the correct day
-      const mealDate = updatedMeal.date?.includes('-') 
-        ? updatedMeal.date 
-        : getTodayDate() // Default to today if not in YYYY-MM-DD format
-      
+      const mealDate = updatedMeal.date?.includes("-") ? updatedMeal.date : getTodayDate() // Default to today if not in YYYY-MM-DD format
+
       // Reload meals for the affected date
       await loadMealsForDate(mealDate)
-      
+
       // Close edit screen
       handleCloseMealEdit()
-      
+
       // Show success message
       Alert.alert("Success", "Meal updated successfully")
     } catch (error) {
@@ -291,8 +305,8 @@ export const HomeScreen = ({ onFooterVisibilityChange, onSettingsPress, customBa
     const day = dateMatch ? dateMatch[1] : new Date().getDate().toString()
     const month = new Date().getMonth() + 1
     const year = new Date().getFullYear()
-    const isoDate = `${year}-${month.toString().padStart(2, '0')}-${day.padStart(2, '0')}`
-    
+    const isoDate = `${year}-${month.toString().padStart(2, "0")}-${day.padStart(2, "0")}`
+
     return {
       id: mealData.id,
       userId: user?.uid || "",
@@ -311,12 +325,6 @@ export const HomeScreen = ({ onFooterVisibilityChange, onSettingsPress, customBa
       updatedAt: new Date() as any,
     }
   }
-
-  // Calculate footer transform based on animation value
-  const footerTranslateY = footerAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, height * 0.15]
-  })
 
   return (
     <View style={styles.container}>
@@ -385,12 +393,21 @@ export const HomeScreen = ({ onFooterVisibilityChange, onSettingsPress, customBa
         />
       </View>
 
+      {/* Animated Footer */}
+      <AnimatedFooter
+        isVisible={footerVisible}
+        activeTab={activeTab}
+        onAddPress={handleNavigateToLogMeal}
+        onStatsPress={handleNavigateToStats}
+        onRocketPress={handleNavigateToGames}
+      />
+
       {/* Meal Edit Modal */}
       {selectedMeal && (
-        <MealEditScreen 
-          meal={convertToMealType(selectedMeal)} 
-          onClose={handleCloseMealEdit} 
-          onSave={handleSaveMeal} 
+        <MealEditScreen
+          meal={convertToMealType(selectedMeal)}
+          onClose={handleCloseMealEdit}
+          onSave={handleSaveMeal}
           visible={showMealEdit}
         />
       )}

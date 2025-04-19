@@ -6,7 +6,6 @@ import {
   StyleSheet,
   Dimensions,
   SafeAreaView,
-  Animated,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
@@ -18,44 +17,20 @@ interface AddFoodOptionsScreenProps {
 
 const AddFoodOptionsScreen: React.FC<AddFoodOptionsScreenProps> = ({ navigation }) => {
   const handleOptionPress = (option: 'qrCode' | 'searchDatabase' | 'customFood') => {
-    // Create a simple animation for the option press
-    const pressAnimation = new Animated.Value(1);
-    
-    Animated.sequence([
-      // First scale down
-      Animated.timing(pressAnimation, {
-        toValue: 0.95,
-        duration: 100,
-        useNativeDriver: true,
-      }),
-      // Then scale back up
-      Animated.timing(pressAnimation, {
-        toValue: 1.05,
-        duration: 100,
-        useNativeDriver: true,
-      }),
-      // Finally return to normal
-      Animated.timing(pressAnimation, {
-        toValue: 1,
-        duration: 100,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      // Navigate when animation is complete
-      switch (option) {
-        case 'qrCode':
-          console.log('Scan QR Code option pressed');
-          // Will implement later
-          break;
-        case 'searchDatabase':
-          console.log('Search Food Database option pressed');
-          // Will implement later
-          break;
-        case 'customFood':
-          navigation.navigate('AddCustomFood');
-          break;
-      }
-    });
+    // Navigate immediately without animation delay
+    switch (option) {
+      case 'qrCode':
+        console.log('Scan QR Code option pressed');
+        // Will implement later
+        break;
+      case 'searchDatabase':
+        console.log('Search Food Database option pressed');
+        // Will implement later
+        break;
+      case 'customFood':
+        navigation.navigate('AddCustomFood');
+        break;
+    }
   };
 
   return (
@@ -73,6 +48,7 @@ const AddFoodOptionsScreen: React.FC<AddFoodOptionsScreenProps> = ({ navigation 
           <TouchableOpacity 
             style={styles.optionCard} 
             onPress={() => handleOptionPress('qrCode')}
+            activeOpacity={0.7}
           >
             <View style={styles.optionIconContainer}>
               <MaterialCommunityIcons name="qrcode-scan" size={30} color="#FFFFFF" />
@@ -84,6 +60,7 @@ const AddFoodOptionsScreen: React.FC<AddFoodOptionsScreenProps> = ({ navigation 
           <TouchableOpacity 
             style={styles.optionCard} 
             onPress={() => handleOptionPress('searchDatabase')}
+            activeOpacity={0.7}
           >
             <View style={styles.optionIconContainer}>
               <MaterialCommunityIcons name="magnify" size={30} color="#FFFFFF" />
@@ -95,6 +72,7 @@ const AddFoodOptionsScreen: React.FC<AddFoodOptionsScreenProps> = ({ navigation 
           <TouchableOpacity 
             style={styles.optionCard} 
             onPress={() => handleOptionPress('customFood')}
+            activeOpacity={0.7}
           >
             <View style={styles.optionIconContainer}>
               <MaterialCommunityIcons name="plus-circle-outline" size={30} color="#FFFFFF" />

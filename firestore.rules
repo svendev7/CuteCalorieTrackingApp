@@ -4,6 +4,11 @@ service cloud.firestore {
     // User profiles - users can only read/write their own documents
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
+      
+      // User foods - users can only read/write their own foods
+      match /foods/{foodId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
     }
     
     // Meals - users can only read/write their own meals

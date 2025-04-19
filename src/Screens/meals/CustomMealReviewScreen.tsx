@@ -19,10 +19,14 @@ import {
   Keyboard,
   Animated,
   ActivityIndicator,
+  Switch,
 } from "react-native"
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons"
-import { auth } from "../../config/firebase"
+import { auth, db } from "../../config/firebase"
 import { addMeal } from "../../services/mealService"
+import { generateMealName } from "../../services/aiService"
+import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore"
 import Toast from 'react-native-toast-message'
 import * as ImagePicker from 'expo-image-picker'
 
@@ -49,15 +53,105 @@ interface CustomMealReviewScreenProps {
 
 export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ navigation, route }) => {
   const initialFoods = route.params?.selectedFoods || route.params?.items || [];
+  const defaultMealName = route.params?.defaultMealName || '';
   const [foods, setFoods] = useState<Food[]>(initialFoods);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedFoodIndex, setSelectedFoodIndex] = useState<number | null>(null);
   const [quantity, setQuantity] = useState('100');
   const [unit, setUnit] = useState('g');
-  const [mealName, setMealName] = useState('');
+  const [mealName, setMealName] = useState(defaultMealName);
   const [isSaving, setIsSaving] = useState(false);
   const [mealImage, setMealImage] = useState<string | null>(null);
   const modalOffset = useRef(new Animated.Value(0)).current;
+  
+  // AI meal name states
+  const [showAiSuggestionModal, setShowAiSuggestionModal] = useState(false);
+  const [aiMealNameSuggestion, setAiMealNameSuggestion] = useState('');
+  const [disableAiSuggestions, setDisableAiSuggestions] = useState(false);
+  
+  // Check user preference for AI suggestions on component mount
+  useEffect(() => {
+    const checkAiPreference = async () => {
+      try {
+        if (auth.currentUser) {
+          const userDoc = await getDoc(doc(db, "users", auth.currentUser.uid));
+          if (userDoc.exists()) {
+            const userPreference = userDoc.data().disableAiSuggestions || false;
+            setDisableAiSuggestions(userPreference);
+            
+            // Only automatically suggest a name if AI suggestions are not disabled
+            if (foods.length > 1 && !mealName && !userPreference) {
+              const suggestion = generateMealName(foods);
+              setAiMealNameSuggestion(suggestion);
+              setShowAiSuggestionModal(true);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error reading AI preference from Firestore:', error);
+      }
+    };
+    
+    checkAiPreference();
+  }, [foods, mealName]);
+  
+  // Generate an AI meal name
+  const handleGenerateAiName = () => {
+    if (foods.length === 0) return;
+    
+    const suggestion = generateMealName(foods);
+    setAiMealNameSuggestion(suggestion);
+    
+    // Always show the modal when button is clicked
+    setShowAiSuggestionModal(true);
+  };
+  
+  // Accept the AI suggested name
+  const acceptAiSuggestion = () => {
+    setMealName(aiMealNameSuggestion);
+    setShowAiSuggestionModal(false);
+  };
+  
+  // Save user preference for AI suggestions
+  const handleDisableAiSuggestions = async (disable: boolean) => {
+    setDisableAiSuggestions(disable);
+    try {
+      if (auth.currentUser) {
+        const userRef = doc(db, "users", auth.currentUser.uid);
+        
+        // Check if the user document exists first
+        const userDoc = await getDoc(userRef);
+        
+        if (userDoc.exists()) {
+          // Update the existing document
+          await updateDoc(userRef, {
+            disableAiSuggestions: disable
+          });
+        } else {
+          // Create a new document with the preference
+          await setDoc(userRef, {
+            disableAiSuggestions: disable,
+            createdAt: new Date()
+          });
+        }
+        
+        // Show confirmation
+        Toast.show({
+          type: 'success',
+          text1: disable ? 'AI Suggestions Disabled' : 'AI Suggestions Enabled',
+          text2: disable ? 'You won\'t see automatic meal name suggestions' : 'You\'ll now see automatic meal name suggestions',
+          position: 'bottom'
+        });
+      }
+    } catch (error) {
+      console.error('Error saving AI preference to Firestore:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to save your preference'
+      });
+    }
+  };
 
   // Set up keyboard listeners
   useEffect(() => {
@@ -166,12 +260,24 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
         isCustom: false
       })
       
+      // Call the callback to clear the cart in AddMealLogScreen
+      const onMealLogged = navigation.getParam ? navigation.getParam('onMealLogged') : 
+                          route.params?.onMealLogged;
+                          
+      if (typeof onMealLogged === 'function') {
+        onMealLogged();
+      }
+      
+      // React Native doesn't support window or CustomEvent
+      // The onMealLogged callback will handle cart clearing
+      
       Toast.show({
         type: 'success',
-        text1: 'Meal Confirmed',
-        text2: 'Your meal has been confirmed'
+        text1: 'Success',
+        text2: 'Meal has been added to your log'
       })
       
+      // Navigate back to the log screen
       navigation.goBack()
     } catch (error) {
       console.error('Error confirming meal:', error)
@@ -240,16 +346,28 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
           unit: food.unit || 'g'
         })),
         imageUrl: mealImage, // Use the selected image if available
-        isCustom: false
+        isCustom: false,
+        isLogged: true
       })
+      
+      // Call the callback to clear the cart in AddMealLogScreen
+      const onMealLogged = navigation.getParam ? navigation.getParam('onMealLogged') : 
+                          route.params?.onMealLogged;
+      
+      if (typeof onMealLogged === 'function') {
+        onMealLogged();
+      }
+      
+      // React Native doesn't support window or CustomEvent
+      // The onMealLogged callback will handle cart clearing
       
       Toast.show({
         type: 'success',
         text1: 'Meal Logged',
         text2: 'Your meal has been logged successfully'
-      })
+      });
       
-      navigation.goBack()
+      navigation.goBack();
     } catch (error) {
       console.error('Error logging meal:', error)
       Toast.show({
@@ -321,6 +439,17 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
         imageUrl: mealImage,
         isCustom: true
       })
+      
+      // Call the callback to clear the cart in AddMealLogScreen
+      const onMealLogged = navigation.getParam ? navigation.getParam('onMealLogged') : 
+                          route.params?.onMealLogged;
+                          
+      if (typeof onMealLogged === 'function') {
+        onMealLogged();
+      }
+      
+      // React Native doesn't support window or CustomEvent
+      // The onMealLogged callback will handle cart clearing
       
       Toast.show({
         type: 'success',
@@ -666,9 +795,18 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
 
             {/* Name input field - now required */}
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>
-                Meal Name <Text style={styles.requiredAsterisk}>*</Text>
-              </Text>
+              <View style={styles.nameInputHeader}>
+                <Text style={styles.inputLabel}>
+                  Meal Name <Text style={styles.requiredAsterisk}>*</Text>
+                </Text>
+                <TouchableOpacity 
+                  style={styles.aiSuggestButton}
+                  onPress={handleGenerateAiName}
+                >
+                  <Ionicons name="bulb-outline" size={16} color="#FFD700" />
+                  <Text style={styles.aiSuggestText}>Suggest Name</Text>
+                </TouchableOpacity>
+              </View>
               <TextInput
                 style={[styles.textInput, !mealName.trim() && styles.inputRequired]}
                 placeholder="Enter a name for this meal"
@@ -819,6 +957,55 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
 
         {/* Quantity Edit Modal */}
         {renderQuantityModal()}
+        
+        {/* AI Meal Name Suggestion Modal */}
+        <Modal
+          animationType="fade"
+          transparent={true}
+          visible={showAiSuggestionModal}
+          onRequestClose={() => setShowAiSuggestionModal(false)}
+        >
+          <TouchableWithoutFeedback onPress={() => setShowAiSuggestionModal(false)}>
+            <View style={styles.modalOverlay}>
+              <TouchableWithoutFeedback onPress={e => e.stopPropagation()}>
+                <View style={styles.aiSuggestionModalContent}>
+                  <View style={styles.aiSuggestionHeader}>
+                    <Ionicons name="bulb" size={24} color="#FFD700" />
+                    <Text style={styles.aiSuggestionTitle}>AI Suggested Name</Text>
+                  </View>
+                  
+                  <Text style={styles.aiSuggestionText}>{aiMealNameSuggestion}</Text>
+                  
+                  <View style={styles.aiActionButtons}>
+                    <TouchableOpacity 
+                      style={[styles.aiActionButton, styles.aiRejectButton]}
+                      onPress={() => setShowAiSuggestionModal(false)}
+                    >
+                      <Text style={styles.aiRejectButtonText}>No Thanks</Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity 
+                      style={[styles.aiActionButton, styles.aiAcceptButton]}
+                      onPress={acceptAiSuggestion}
+                    >
+                      <Text style={styles.aiAcceptButtonText}>Use This</Text>
+                    </TouchableOpacity>
+                  </View>
+                  
+                  <View style={styles.aiPreferenceContainer}>
+                    <Text style={styles.aiPreferenceText}>Don't show suggestions</Text>
+                    <Switch
+                      value={disableAiSuggestions}
+                      onValueChange={handleDisableAiSuggestions}
+                      trackColor={{ false: '#3A3A3C', true: '#2E5E3B' }}
+                      thumbColor={disableAiSuggestions ? '#45A557' : '#FFFFFF'}
+                    />
+                  </View>
+                </View>
+              </TouchableWithoutFeedback>
+            </View>
+          </TouchableWithoutFeedback>
+        </Modal>
       </View>
     </SafeAreaView>
   )
@@ -1321,6 +1508,100 @@ const styles = StyleSheet.create({
   },
   fibersValue: { 
     color: "#5AC8FA",
+  },
+  nameInputHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  aiSuggestButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 215, 0, 0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  aiSuggestText: {
+    color: '#FFD700',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  aiSuggestionModalContent: {
+    backgroundColor: '#1C1C1E',
+    borderRadius: 16,
+    padding: 20,
+    width: width * 0.85,
+    maxWidth: 350,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  aiSuggestionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  aiSuggestionTitle: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '600',
+    marginLeft: 10,
+  },
+  aiSuggestionText: {
+    color: '#FFFFFF',
+    fontSize: 22,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginVertical: 20,
+  },
+  aiActionButtons: {
+    flexDirection: 'row',
+    width: '100%',
+    justifyContent: 'space-between',
+    marginTop: 10,
+  },
+  aiActionButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    minWidth: '45%',
+    alignItems: 'center',
+  },
+  aiRejectButton: {
+    backgroundColor: '#2C2C2E',
+  },
+  aiAcceptButton: {
+    backgroundColor: '#45A557',
+  },
+  aiRejectButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  aiAcceptButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  aiPreferenceContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginTop: 20,
+    paddingTop: 15,
+    borderTopWidth: 1,
+    borderTopColor: '#2E2E2E',
+  },
+  aiPreferenceText: {
+    color: '#A0A0A0',
+    fontSize: 14,
   },
 })
 
