@@ -213,28 +213,39 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
   };
 
   const handleConfirmPress = async () => {
-    if (foods.length === 0) {
+    if (!auth.currentUser) {
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'You must be logged in to save a meal',
+      })
       return
     }
-    
+
+    if (foods.length === 0) {
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Please add at least one food to create a meal',
+      })
+      return
+    }
+
+    if (mealName.trim() === '') {
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Please enter a name for your meal',
+      })
+      return
+    }
+
     try {
-      const currentUser = auth.currentUser
-      if (!currentUser) {
-        // Show error toast
-        Toast.show({
-          type: 'error',
-          text1: 'Authentication Error',
-          text2: 'You must be logged in to perform this action'
-        })
-        return
-      }
-      
+      setIsSaving(true)
       const totalMacros = calculateTotalMacros()
-      
-      // Create a new meal object
-      await addMeal({
-        userId: currentUser.uid,
-        mealName: mealName || `Custom Meal (${new Date().toLocaleDateString()})`,
+      const newMeal = {
+        userId: auth.currentUser.uid,
+        mealName: mealName,
         protein: totalMacros.protein,
         carbs: totalMacros.carbs,
         fat: totalMacros.fat,
@@ -243,7 +254,6 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
         fibers: totalMacros.fibers,
         sodium: totalMacros.sodium,
         date: new Date().toISOString().split('T')[0],
-        loggedTime: new Date().toISOString(),
         foods: foods.map(food => ({
           id: food.id,
           name: food.name,
@@ -257,35 +267,46 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
           amount: food.amount || 100,
           unit: food.unit || 'g'
         })),
-        isCustom: false
-      })
-      
-      // Call the callback to clear the cart in AddMealLogScreen
-      const onMealLogged = navigation.getParam ? navigation.getParam('onMealLogged') : 
-                          route.params?.onMealLogged;
-                          
-      if (typeof onMealLogged === 'function') {
-        onMealLogged();
+        mealType: 'breakfast',
+        createdAt: new Date().toISOString(),
+        isCustom: true
       }
-      
-      // React Native doesn't support window or CustomEvent
-      // The onMealLogged callback will handle cart clearing
+
+      await addMeal(newMeal)
       
       Toast.show({
         type: 'success',
         text1: 'Success',
-        text2: 'Meal has been added to your log'
+        text2: 'Meal has been successfully logged',
       })
       
-      // Navigate back to the log screen
-      navigation.goBack()
+      // Refresh the HomeScreen view
+      const homeScreen = navigation.getParent()?.getState().routes.find(
+        route => route.name === 'HomeTabs' || route.name === 'Home'
+      )
+      
+      if (homeScreen?.params?.refreshHomeScreen) {
+        homeScreen.params.refreshHomeScreen()
+      } else if (navigation.getParent()?.refreshHomeScreen) {
+        navigation.getParent().refreshHomeScreen()
+      } else if (navigation.refreshHomeScreen) {
+        navigation.refreshHomeScreen()
+      }
+      
+      // Navigate back with a slight delay to allow Firebase to update
+      setTimeout(() => {
+        navigation.goBack()
+      }, 100)
+      
     } catch (error) {
-      console.error('Error confirming meal:', error)
+      console.error('Error logging meal:', error)
       Toast.show({
         type: 'error',
         text1: 'Error',
-        text2: 'Failed to confirm meal'
+        text2: 'Failed to log meal. Please try again.',
       })
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -358,8 +379,18 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
         onMealLogged();
       }
       
-      // React Native doesn't support window or CustomEvent
-      // The onMealLogged callback will handle cart clearing
+      // Refresh the HomeScreen view
+      const homeScreen = navigation.getParent()?.getState()?.routes?.find(
+        route => route.name === 'HomeTabs' || route.name === 'Home'
+      )
+      
+      if (homeScreen?.params?.refreshHomeScreen) {
+        homeScreen.params.refreshHomeScreen()
+      } else if (navigation.getParent()?.refreshHomeScreen) {
+        navigation.getParent().refreshHomeScreen()
+      } else if (navigation.refreshHomeScreen) {
+        navigation.refreshHomeScreen()
+      }
       
       Toast.show({
         type: 'success',
@@ -450,6 +481,19 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
       
       // React Native doesn't support window or CustomEvent
       // The onMealLogged callback will handle cart clearing
+      
+      // Refresh the HomeScreen view
+      const homeScreen = navigation.getParent()?.getState()?.routes?.find(
+        route => route.name === 'HomeTabs' || route.name === 'Home'
+      )
+      
+      if (homeScreen?.params?.refreshHomeScreen) {
+        homeScreen.params.refreshHomeScreen()
+      } else if (navigation.getParent()?.refreshHomeScreen) {
+        navigation.getParent().refreshHomeScreen()
+      } else if (navigation.refreshHomeScreen) {
+        navigation.refreshHomeScreen()
+      }
       
       Toast.show({
         type: 'success',

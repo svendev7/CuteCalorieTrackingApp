@@ -85,7 +85,7 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
   const modalOffset = useRef(new Animated.Value(0)).current
   const tabIndicatorPosition = useRef(new Animated.Value(0)).current
   const filterIndicatorPosition = useRef(new Animated.Value(0)).current
-
+  
   // Add states for Firestore data
   const [foodItems, setFoodItems] = useState<FoodItem[]>([])
   const [mealItems, setMealItems] = useState<MealItem[]>([])
@@ -144,15 +144,15 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
     try {
       setLoading(true)
       const currentUser = auth.currentUser
-
+      
       if (!currentUser) {
         throw new Error("User not authenticated")
       }
-
+      
       // Fetch meals based on active filter
       let meals = []
       let foods = []
-
+      
       switch (activeFilter) {
         case "Recent":
           meals = await getRecentMealsByUserId(currentUser.uid)
@@ -170,7 +170,7 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
           meals = await getRecentMealsByUserId(currentUser.uid)
           foods = await getUserFoodsByType(currentUser.uid, "recent")
       }
-
+      
       // Transform meals to the format expected by the UI
       const transformedMeals = meals.map((meal) => ({
         id: meal.id,
@@ -246,7 +246,7 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
       tension: 100, // Lower tension = slower
       useNativeDriver: false,
     }).start()
-
+    
     setActiveTab(tabName)
     // Reset filter to Recent when switching tabs
     setActiveFilter("Recent")
@@ -257,7 +257,7 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
       tension: 100,
       useNativeDriver: false,
     }).start()
-
+    
     // Fetch data when tab changes
     fetchMeals()
   }
@@ -265,7 +265,7 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
   const handleFilterPress = (filterName: string) => {
     // Calculate position based on filter index
     const filterIndex = ["Recent", "Created", "Favorites"].indexOf(filterName)
-
+    
     // Animate filter indicator
     Animated.spring(filterIndicatorPosition, {
       toValue: filterIndex,
@@ -273,7 +273,7 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
       tension: 100,
       useNativeDriver: false,
     }).start()
-
+    
     setActiveFilter(filterName)
   }
 
@@ -336,11 +336,11 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
 
   const renderQuantityModal = () => {
     if (!selectedFood) return null
-
+    
     // Calculate macro values based on current quantity input
     const baseAmount = 100 // Base amount (typically 100g)
     const ratio = Number.parseFloat(quantity) / baseAmount || 0
-
+    
     const calculatedMacros = {
       protein: Math.round(selectedFood.protein * ratio * 10) / 10,
       carbs: Math.round(selectedFood.carbs * ratio * 10) / 10,
@@ -350,7 +350,7 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
       sugar: Math.round((selectedFood.sugar || 0) * ratio * 10) / 10,
       fibers: Math.round((selectedFood.fibers || 0) * ratio * 10) / 10,
     }
-
+    
     return (
       <Modal
         animationType="slide"
@@ -367,16 +367,16 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
                   <Ionicons name="close" size={24} color="#FFFFFF" />
                 </TouchableOpacity>
               </View>
-
+              
               <Text style={styles.foodTitleInModal}>{selectedFood.name}</Text>
-
+              
               {/* Dynamic Macro Display */}
               <View style={styles.dynamicMacrosContainer}>
                 <View style={styles.calorieRow}>
                   <Text style={styles.dynamicCalorieValue}>{formatMacro(calculatedMacros.calories, true)}</Text>
                   <Text style={styles.dynamicCalorieLabel}>Calories</Text>
                 </View>
-
+                
                 <View style={styles.dynamicMacrosRow}>
                   <View style={styles.dynamicMacroItem}>
                     <Text style={[styles.dynamicMacroValue, styles.proteinColor]}>
@@ -384,14 +384,14 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
                     </Text>
                     <Text style={styles.dynamicMacroLabel}>Protein</Text>
                   </View>
-
+                  
                   <View style={styles.dynamicMacroItem}>
                     <Text style={[styles.dynamicMacroValue, styles.carbsColor]}>
                       {formatMacro(calculatedMacros.carbs)}g
                     </Text>
                     <Text style={styles.dynamicMacroLabel}>Carbs</Text>
                   </View>
-
+                  
                   <View style={styles.dynamicMacroItem}>
                     <Text style={[styles.dynamicMacroValue, styles.fatColor]}>
                       {formatMacro(calculatedMacros.fat)}g
@@ -399,7 +399,7 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
                     <Text style={styles.dynamicMacroLabel}>Fat</Text>
                   </View>
                 </View>
-
+                
                 <View style={styles.dynamicMacrosRow}>
                   <View style={styles.dynamicMacroItem}>
                     <Text style={[styles.dynamicMacroValue, styles.sodiumColor]}>
@@ -407,14 +407,14 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
                     </Text>
                     <Text style={styles.dynamicMacroLabel}>Sodium</Text>
                   </View>
-
+                  
                   <View style={styles.dynamicMacroItem}>
                     <Text style={[styles.dynamicMacroValue, styles.sugarColor]}>
                       {formatMacro(calculatedMacros.sugar)}g
                     </Text>
                     <Text style={styles.dynamicMacroLabel}>Sugar</Text>
                   </View>
-
+                  
                   <View style={styles.dynamicMacroItem}>
                     <Text style={[styles.dynamicMacroValue, styles.fiberColor]}>
                       {formatMacro(calculatedMacros.fibers)}g
@@ -423,9 +423,9 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
                   </View>
                 </View>
               </View>
-
+              
               <Text style={styles.modalSubtitle}>Set quantity:</Text>
-
+              
               <View style={styles.quantityInputContainer}>
                 <TextInput
                   style={styles.quantityInput}
@@ -435,10 +435,10 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
                   placeholder="100"
                   placeholderTextColor="#666666"
                 />
-
+                
                 <View style={styles.unitSelector}>
                   {["g", "ml", "oz", "lb"].map((unitOption) => (
-                    <TouchableOpacity
+                    <TouchableOpacity 
                       key={unitOption}
                       style={[styles.unitOption, unit === unitOption && styles.selectedUnit]}
                       onPress={() => setUnit(unitOption)}
@@ -450,8 +450,8 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
                   ))}
                 </View>
               </View>
-
-              <TouchableOpacity
+              
+              <TouchableOpacity 
                 style={styles.addToMealButton}
                 onPress={() => {
                   handleAddItemToMeal(selectedFood, quantity, unit)
@@ -689,7 +689,7 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
         </View>
       )
     }
-
+    
     if (error) {
       return (
         <View style={styles.errorContainer}>
@@ -746,7 +746,7 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
                 </View>
               )}
             </View>
-            <View style={styles.itemDetails}>
+          <View style={styles.itemDetails}>
               <View style={styles.nameRow}>
                 <Text style={styles.itemName} numberOfLines={1} ellipsizeMode="tail">
                   {item.name}
@@ -756,7 +756,7 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
                 )}
               </View>
 
-              <View style={styles.macroWrapper}>
+            <View style={styles.macroWrapper}>
                 <View style={styles.macrosContainer}>
                   <View style={styles.macroItem}>
                     <View style={[styles.macroDot, { backgroundColor: "#EF476F" }]} />
@@ -782,7 +782,7 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
                     </Text>
                   </View>
                 </View>
-
+                
                 <View style={styles.macroSeparator} />
 
                 <View style={styles.macrosContainer}>
@@ -808,21 +808,21 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
                       <Text style={styles.macroValue}>{formatMacro(item.fibers || 0)}g </Text>
                       <Text style={styles.macroLabel}>Fi</Text>
                     </Text>
-                  </View>
-                </View>
-
-                <View style={styles.macroSeparator} />
-
-                <View style={styles.footerRow}>
-                  <Text style={styles.itemCaloriesValue}>{formatMacro(item.calories, true)} Calories</Text>
-                  <Text style={styles.perUnitText}>per {item.servingSize || 100}g</Text>
                 </View>
               </View>
+              
+              <View style={styles.macroSeparator} />
+              
+              <View style={styles.footerRow}>
+                  <Text style={styles.itemCaloriesValue}>{formatMacro(item.calories, true)} Calories</Text>
+                  <Text style={styles.perUnitText}>per {item.servingSize || 100}g</Text>
+              </View>
             </View>
-            <TouchableOpacity style={styles.addButton} onPress={() => handleFoodPress(item)}>
-              <MaterialCommunityIcons name="plus" size={24} color="#FFFFFF" />
-            </TouchableOpacity>
           </View>
+            <TouchableOpacity style={styles.addButton} onPress={() => handleFoodPress(item)}>
+            <MaterialCommunityIcons name="plus" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
         </Swipeable>
       )
     })
@@ -941,7 +941,7 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <View style={styles.container}>
+      <View style={styles.container}>
           {/* Add loading overlay */}
           {isLoggingSingleItem && (
             <View style={styles.loadingOverlay}>
@@ -952,40 +952,40 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
             </View>
           )}
           
-          {/* Header matching other screens exactly */}
-          <View style={styles.header}>
-            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-              <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>Log Items</Text>
-            <TouchableOpacity onPress={handleCartPress} style={styles.cartButton}>
-              <Ionicons name="cart-outline" size={24} color="#FFFFFF" />
-              {cartCount > 0 && (
-                <View style={styles.cartBadge}>
-                  <Text style={styles.cartBadgeText}>{cartCount}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          </View>
+        {/* Header matching other screens exactly */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}> 
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Log Items</Text>
+          <TouchableOpacity onPress={handleCartPress} style={styles.cartButton}>
+            <Ionicons name="cart-outline" size={24} color="#FFFFFF" />
+            {cartCount > 0 && (
+              <View style={styles.cartBadge}>
+                <Text style={styles.cartBadgeText}>{cartCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
 
-          {/* Main Content Area */}
-          <ScrollView
-            style={styles.scrollView}
-            contentContainerStyle={styles.scrollViewContent}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          >
-            {/* Updated Tabs with Animated Indicator */}
-            <View style={styles.tabContainer}>
-              {/* Animated Tab Indicator */}
-              <Animated.View
-                style={[
-                  styles.tabIndicator,
-                  {
+        {/* Main Content Area */}
+        <ScrollView 
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollViewContent}
+          showsVerticalScrollIndicator={false} 
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Updated Tabs with Animated Indicator */}
+          <View style={styles.tabContainer}>
+            {/* Animated Tab Indicator */}
+            <Animated.View 
+              style={[
+                styles.tabIndicator,
+                {
                     transform: [
                       {
-                        translateX: tabIndicatorPosition.interpolate({
-                          inputRange: [0, 1],
+                    translateX: tabIndicatorPosition.interpolate({
+                      inputRange: [0, 1],
                           outputRange: [0, width / 2 - 20], // Using pixel values instead of percentages
                         }),
                       },
@@ -996,45 +996,45 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
 
               <TouchableOpacity style={styles.tabButton} onPress={() => handleTabPress("Foods")}>
                 <Text style={[styles.tabText, activeTab === "Foods" && styles.activeTabText]}>Foods</Text>
-              </TouchableOpacity>
+            </TouchableOpacity>
               <TouchableOpacity style={styles.tabButton} onPress={() => handleTabPress("Meals")}>
                 <Text style={[styles.tabText, activeTab === "Meals" && styles.activeTabText]}>Meals</Text>
-              </TouchableOpacity>
-            </View>
+            </TouchableOpacity>
+          </View>
 
-            {/* Updated Search Bar with Icon */}
-            <View style={styles.searchContainer}>
-              <View style={styles.searchInputContainer}>
-                <Ionicons name="search" size={18} color="#666666" style={styles.searchIcon} />
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder="Search..."
-                  placeholderTextColor="#666666"
-                  value={searchText}
-                  onChangeText={setSearchText}
-                />
-              </View>
+          {/* Updated Search Bar with Icon */}
+          <View style={styles.searchContainer}>
+            <View style={styles.searchInputContainer}>
+              <Ionicons name="search" size={18} color="#666666" style={styles.searchIcon} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search..."
+                placeholderTextColor="#666666"
+                value={searchText}
+                onChangeText={setSearchText}
+              />
             </View>
+          </View>
 
-            {/* Updated Add Food Button */}
+          {/* Updated Add Food Button */}
             {activeTab === "Foods" && (
-              <TouchableOpacity style={styles.addFoodButton} onPress={handleAddFoodPress}>
-                <MaterialCommunityIcons name="plus" size={20} color="#45A557" />
-                <Text style={styles.addFoodButtonText}>Add food</Text>
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity style={styles.addFoodButton} onPress={handleAddFoodPress}>
+              <MaterialCommunityIcons name="plus" size={20} color="#45A557" />
+              <Text style={styles.addFoodButtonText}>Add food</Text>
+            </TouchableOpacity>
+          )}
 
-            {/* Updated Filters with Animated Indicator */}
-            <View style={styles.filterContainer}>
-              {/* Animated Filter Indicator */}
-              <Animated.View
-                style={[
-                  styles.filterIndicator,
-                  {
+          {/* Updated Filters with Animated Indicator */}
+          <View style={styles.filterContainer}>
+            {/* Animated Filter Indicator */}
+            <Animated.View 
+              style={[
+                styles.filterIndicator,
+                {
                     transform: [
                       {
-                        translateX: filterIndicatorPosition.interpolate({
-                          inputRange: [0, 1, 2],
+                    translateX: filterIndicatorPosition.interpolate({
+                      inputRange: [0, 1, 2],
                           outputRange: [0, (width - 40) / 3, (2 * (width - 40)) / 3], // Using pixel values
                         }),
                       },
@@ -1047,29 +1047,29 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
               {["Recent", "Created", "Favorites"].map((filter) => (
                 <TouchableOpacity key={filter} style={styles.filterButton} onPress={() => handleFilterPress(filter)}>
                   <Text style={[styles.filterText, activeFilter === filter && styles.activeFilterText]}>{filter}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+              </TouchableOpacity>
+            ))}
+          </View>
 
-            {/* Content List */}
+          {/* Content List */}
             <View style={styles.listContainer}>{renderContent()}</View>
-          </ScrollView>
+        </ScrollView>
 
-          <View style={styles.footer}>
-            <TouchableOpacity
-              onPress={handleContinuePress}
-              style={[styles.continueButton, selectedItems.length === 0 && styles.disabledButton]}
-              disabled={selectedItems.length === 0}
-            >
+        <View style={styles.footer}>
+          <TouchableOpacity 
+            onPress={handleContinuePress} 
+            style={[styles.continueButton, selectedItems.length === 0 && styles.disabledButton]}
+            disabled={selectedItems.length === 0}
+          >
               <Text style={[styles.buttonText, selectedItems.length === 0 && styles.disabledButtonText]}>
                 {selectedItems.length === 1 ? "Log" : "Continue"}
               </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Quantity Modal */}
-          {renderQuantityModal()}
+          </TouchableOpacity>
         </View>
+
+        {/* Quantity Modal */}
+        {renderQuantityModal()}
+      </View>
       </GestureHandlerRootView>
     </SafeAreaView>
   )

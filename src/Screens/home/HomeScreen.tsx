@@ -122,23 +122,36 @@ export const HomeScreen = ({ onFooterVisibilityChange, onSettingsPress, customBa
     }
   }, [user])
 
-  // Handle footer visibility changes from scroll
-  const handleFooterVisibility = (visible: boolean) => {
-    // Update internal footer visibility state
-    setFooterVisible(visible && !preventFooter)
-
-    // Also call the parent's handler if it exists
-    if (onFooterVisibilityChange) {
-      onFooterVisibilityChange(visible && !preventFooter)
+  // Add a function to refresh the current view
+  const refreshCurrentView = () => {
+    if (user) {
+      // Refresh all loaded dates
+      const promises = loadedDates.map(date => loadMealsForDate(date))
+      return Promise.all(promises)
     }
+    return Promise.resolve()
   }
 
-  // Listen for navigation events
+  // Expose the refresh method to the navigation
+  useEffect(() => {
+    if (navigation && typeof navigation.setParams === 'function') {
+      // Make refreshCurrentView available to other components via the navigation param
+      navigation.setParams({ refreshHomeScreen: refreshCurrentView })
+    } else if (navigation) {
+      // Alternative approach when setParams is not available
+      navigation.refreshHomeScreen = refreshCurrentView
+    }
+  }, [navigation, loadedDates, user])
+
+  // Listen for focus events to refresh data when returning to this screen
   useEffect(() => {
     let unsubscribeFocus
 
     if (navigation && navigation.addListener) {
       unsubscribeFocus = navigation.addListener("focus", () => {
+        // Refresh data when screen comes into focus
+        refreshCurrentView()
+        
         // Wait until navigation completes before allowing footer to show again
         setTimeout(() => {
           setPreventFooter(false)
@@ -152,7 +165,18 @@ export const HomeScreen = ({ onFooterVisibilityChange, onSettingsPress, customBa
         unsubscribeFocus.remove()
       }
     }
-  }, [navigation])
+  }, [navigation, refreshCurrentView])
+
+  // Handle footer visibility changes from scroll
+  const handleFooterVisibility = (visible: boolean) => {
+    // Update internal footer visibility state
+    setFooterVisible(visible && !preventFooter)
+
+    // Also call the parent's handler if it exists
+    if (onFooterVisibilityChange) {
+      onFooterVisibilityChange(visible && !preventFooter)
+    }
+  }
 
   // Navigate to log meal screen
   const handleNavigateToLogMeal = () => {
