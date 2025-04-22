@@ -7,7 +7,7 @@ import { SettingsScreen } from "./Screens/settings/SettingsScreen"
 import AnimatedFooter from "./components/footer/AnimatedFooter"
 import OnboardingNavigator from "./Screens/onboarding/OnboardingNavigator"
 import { useAuth } from "./hooks/useAuth"
-import { db } from "./config/firebase"
+import { db, auth } from "./config/firebase"
 import { doc, getDoc, setDoc } from "firebase/firestore"
 import AddMealLogScreen from "./Screens/logging/AddMealLogScreen"
 import AddCustomFoodScreen from "./Screens/logging/AddCustomFoodScreen"
@@ -15,6 +15,8 @@ import CustomMealReviewScreen from "./Screens/meals/CustomMealReviewScreen"
 import { SavedMealsScreen } from "./Screens/meals/SavedMealsScreen"
 import AddFoodOptionsScreen from "./Screens/logging/AddFoodOptionsScreen"
 import Toast from "react-native-toast-message"
+import { SafeAreaProvider } from 'react-native-safe-area-context'
+import { clearAllCartItems, forceResetAllCartItems } from "./services/mealService"
 
 const { width, height } = Dimensions.get("window")
 
@@ -198,13 +200,13 @@ export default function App() {
   }
 
   const navigateTo = (screen) => {
+    // Always clear cart state when navigating to prevent any lingering items
+    forceClearCart();
+    
     setActiveScreen(screen)
 
-    // If returning to home screen, animate the footer in and clear cart
+    // If returning to home screen, animate the footer in
     if (screen === "home") {
-      // Clear cart state to prevent stale items
-      forceClearCart();
-      
       // Short delay to let the screen transition start
       setTimeout(() => {
         setIsFooterVisible(true)
@@ -308,17 +310,52 @@ export default function App() {
     }).start(() => {
       setShowCustomMealReviewScreen(false)
       // Clear the meal items when closing the review screen
-      setCurrentMealLogItems([])
+      setTimeout(() => {
+        setCurrentMealLogItems([]);
+        forceClearCart(); // Call again for good measure
+      }, 100);
     })
   }
 
   // Add a function to forcibly clear the cart
-  const forceClearCart = () => {
+  const forceClearCart = async () => {
+    console.log("🔥 GLOBAL CART RESET: Aggressively clearing cart at App level");
+    
+    // Clear immediately in local state
     setCurrentMealLogItems([]);
-    // React Native doesn't have window/DOM events, so we'll clear directly
-    if (showCustomMealReviewScreen) {
-      // Make sure the cart is cleared
+    
+    // Use setTimeout to ensure state updates properly in async context
+    setTimeout(() => {
       setCurrentMealLogItems([]);
+    }, 100);
+    
+    // Clear cart data in Firestore for the current user - use aggressive method
+    try {
+      const currentUser = auth.currentUser;
+      if (currentUser) {
+        await forceResetAllCartItems(currentUser.uid);
+      }
+    } catch (error) {
+      console.error("Error clearing cart in Firestore:", error);
+    }
+    
+    // Attempt to call the clearCart function in the meal log screen if it exists
+    if (showCustomMealReviewScreen) {
+      try {
+        // If review screen is showing, try to access via ref or other methods
+        setCurrentMealLogItems([]);
+        
+        // Try to update hidden state variables that might be causing issues
+        if (typeof window !== 'undefined') {
+          // @ts-ignore - Force clear any cart-related global state
+          if (window.__PEBBLYPAL_CART_STATE) {
+            // @ts-ignore
+            window.__PEBBLYPAL_CART_STATE = [];
+          }
+        }
+      } catch (err) {
+        console.log('Error clearing cart state:', err);
+      }
     }
   }
 
@@ -335,197 +372,189 @@ export default function App() {
     })
   }
 
-  if (isLoading || authLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#3498db" />
-        <Text style={styles.loadingText}>Loading...</Text>
-      </View>
-    )
-  }
-
-  if (!user || !hasCompletedOnboarding) {
-    return <OnboardingNavigator onComplete={completeOnboarding} />
-  }
-
   return (
-    <View style={styles.container}>
-      {/* Background */}
-      <ImageBackground
-        source={customBackground ? { uri: customBackground } : require("../assets/bg-dark.jpg")}
-        style={styles.backgroundImage}
-      >
-        {/* Home Screen */}
-        <Animated.View style={[styles.screenContainer, { transform: [{ translateX: homeTranslate }] }]}>
-          <HomeScreen
-            onFooterVisibilityChange={setIsFooterVisible}
-            onSettingsPress={() => navigateTo("settings")}
-            customBackground={customBackground}
-            navigation={{
-              navigate: (screen) => navigateTo(screen),
-              addListener: (event, callback) => {
-                // Simple mock of the navigation listener
-                if (event === "focus") {
-                  // Call the callback immediately to simulate a focus event
-                  callback()
-                }
-                // Return an unsubscribe function
-                return {
-                  remove: () => {},
-                }
-              },
-            }}
-          />
-        </Animated.View>
+    <SafeAreaProvider>
+      {isLoading || authLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#06D6A0" />
+          <Text style={styles.loadingText}>Loading...</Text>
+        </View>
+      ) : !user ? (
+        // If no user is logged in, show the onboarding which includes authentication
+        <OnboardingNavigator onComplete={completeOnboarding} />
+      ) : !hasCompletedOnboarding ? (
+        // If user is logged in but hasn't completed onboarding
+        <OnboardingNavigator onComplete={completeOnboarding} />
+      ) : (
+        // User is logged in and has completed onboarding
+        <ImageBackground source={customBackground ? { uri: customBackground } : require("../assets/bg-dark.jpg")} style={styles.backgroundImage}>
+          {/* Home Screen */}
+          <Animated.View style={[styles.screenContainer, { transform: [{ translateX: homeTranslate }] }]}>
+            <HomeScreen
+              onFooterVisibilityChange={setIsFooterVisible}
+              onSettingsPress={() => navigateTo("settings")}
+              customBackground={customBackground}
+              navigation={{
+                navigate: (screen) => navigateTo(screen),
+                addListener: (event, callback) => {
+                  // Simple mock of the navigation listener
+                  if (event === "focus") {
+                    // Call the callback immediately to simulate a focus event
+                    callback()
+                  }
+                  // Return an unsubscribe function
+                  return {
+                    remove: () => {},
+                  }
+                },
+              }}
+            />
+          </Animated.View>
 
-        {/* Settings Screen */}
-        <Animated.View style={[styles.screenContainer, { transform: [{ translateX: settingsTranslate }] }]}>
-          <SettingsScreen
-            navigate={() => navigateTo("home")}
-            updateCustomBackground={updateCustomBackground}
-            customBackground={customBackground}
-          />
-        </Animated.View>
+          {/* Settings Screen */}
+          <Animated.View style={[styles.screenContainer, { transform: [{ translateX: settingsTranslate }] }]}>
+            <SettingsScreen
+              navigate={() => navigateTo("home")}
+              updateCustomBackground={updateCustomBackground}
+              customBackground={customBackground}
+            />
+          </Animated.View>
 
-        {/* Add Meal Screen */}
-        <Animated.View style={[styles.screenContainer, { transform: [{ translateX: addMealTranslate }] }]}>
-          <AddMealLogScreen
-            navigation={{
-              navigate: (screen, params) => {
-                if (screen === "AddFoodOptions") {
-                  handleOpenAddFoodOptions()
-                } else if (screen === "EditCustomFood") {
-                  handleOpenAddOrEditCustomFood(params?.item || null)
-                } else if (screen === "CustomMealReview") {
-                  handleOpenMealReview(params?.selectedFoods || [], params?.defaultMealName || "")
-                } else if (screen === "SavedMeals") {
-                  setShowSavedMealsScreen(true)
-                } else {
-                  console.log(`Navigation to ${screen} not implemented`)
-                }
-              },
-              goBack: () => navigateTo("home"),
-            }}
-          />
-        </Animated.View>
-
-        {/* Rocket Screen (placeholder) */}
-        <Animated.View style={[styles.screenContainer, { transform: [{ translateX: rocketTranslate }] }]}>
-          <View style={styles.placeholderScreen}>
-            <Text style={styles.placeholderText}>Unity View Coming Soon</Text>
-            <View style={styles.buttonContainer}>
-              <Text style={styles.buttonText} onPress={() => navigateTo("home")}>
-                Back to Home
-              </Text>
-            </View>
-          </View>
-        </Animated.View>
-
-        {/* Stats Screen (placeholder) */}
-        <Animated.View style={[styles.screenContainer, { transform: [{ translateX: statsTranslate }] }]}>
-          <View style={styles.placeholderScreen}>
-            <Text style={styles.placeholderText}>Stats & Progress Coming Soon</Text>
-            <View style={styles.buttonContainer}>
-              <Text style={styles.buttonText} onPress={() => navigateTo("home")}>
-                Back to Home
-              </Text>
-            </View>
-          </View>
-        </Animated.View>
-
-        {/* Bottom Navigation (only visible on certain screens) */}
-        {isFooterVisible && (
-          <AnimatedFooter
-            isVisible={isFooterVisible}
-            onAddPress={handleOpenAddMealLog}
-            onRocketPress={handleOpenRocket}
-            onStatsPress={handleOpenStats}
-            onQuickAddPress={handleQuickAddFood}
-          />
-        )}
-
-        {/* Add Food Options Modal (Navigation Stack) */}
-        <Animated.View style={[styles.fullScreenModal, { transform: [{ translateX: addFoodOptionsTranslate }] }]}>
-          {showAddFoodOptionsScreen && (
-            <AddFoodOptionsScreen
+          {/* Add Meal Screen */}
+          <Animated.View style={[styles.screenContainer, { transform: [{ translateX: addMealTranslate }] }]}>
+            <AddMealLogScreen
               navigation={{
                 navigate: (screen, params) => {
-                  if (screen === "AddCustomFood") {
-                    handleOpenAddOrEditCustomFood()
-                    handleCloseAddFoodOptions()
+                  if (screen === "AddFoodOptions") {
+                    handleOpenAddFoodOptions()
+                  } else if (screen === "EditCustomFood") {
+                    handleOpenAddOrEditCustomFood(params?.item || null)
+                  } else if (screen === "CustomMealReview") {
+                    handleOpenMealReview(params?.selectedFoods || [], params?.defaultMealName || "")
                   } else if (screen === "SavedMeals") {
                     setShowSavedMealsScreen(true)
-                    handleCloseAddFoodOptions()
                   } else {
                     console.log(`Navigation to ${screen} not implemented`)
                   }
                 },
-                goBack: handleCloseAddFoodOptions,
+                goBack: () => navigateTo("home"),
               }}
             />
-          )}
-        </Animated.View>
+          </Animated.View>
 
-        {/* Add Custom Food Screen */}
-        <Animated.View style={[styles.fullScreenModal, { transform: [{ translateX: addCustomFoodTranslate }] }]}>
-          {showAddCustomFoodScreen && (
-            <AddCustomFoodScreen
-              navigation={{
-                navigate: (screen, params) => {
-                  console.log(`Navigation to ${screen} not implemented`)
-                },
-                goBack: handleCloseAddCustomFood,
-                save: handleSaveOrUpdateCustomFood,
-              }}
-              route={{
-                params: {
-                  foodToEdit: foodToEdit as any,
-                },
-              }}
-            />
-          )}
-        </Animated.View>
+          {/* Rocket Screen (placeholder) */}
+          <Animated.View style={[styles.screenContainer, { transform: [{ translateX: rocketTranslate }] }]}>
+            <View style={styles.placeholderScreen}>
+              <Text style={styles.placeholderText}>Unity View Coming Soon</Text>
+              <View style={styles.buttonContainer}>
+                <Text style={styles.buttonText} onPress={() => navigateTo("home")}>
+                  Back to Home
+                </Text>
+              </View>
+            </View>
+          </Animated.View>
 
-        {/* Custom Meal Review Screen */}
-        <Animated.View style={[styles.fullScreenModal, { transform: [{ translateX: mealReviewTranslate }] }]}>
+          {/* Stats Screen (placeholder) */}
+          <Animated.View style={[styles.screenContainer, { transform: [{ translateX: statsTranslate }] }]}>
+            <View style={styles.placeholderScreen}>
+              <Text style={styles.placeholderText}>Stats & Progress Coming Soon</Text>
+              <View style={styles.buttonContainer}>
+                <Text style={styles.buttonText} onPress={() => navigateTo("home")}>
+                  Back to Home
+                </Text>
+              </View>
+            </View>
+          </Animated.View>
+
+          {/* Add Meal Review Screen explicitly */}
           {showCustomMealReviewScreen && (
-            <CustomMealReviewScreen
-              navigation={{
-                navigate: () => {},
-                goBack: handleCloseMealReview,
-                getParam: (param) => {
-                  if (param === 'onMealLogged') {
-                    return () => {
-                      // Clear the currently selected foods
-                      setCurrentMealLogItems([]);
-                    };
+            <Animated.View style={[styles.fullScreenModal, { transform: [{ translateX: mealReviewTranslate }] }]}>
+              <CustomMealReviewScreen
+                navigation={{
+                  navigate: () => {},
+                  goBack: handleCloseMealReview,
+                  getParam: (param) => {
+                    if (param === 'onMealLogged') {
+                      return forceClearCart;
+                    }
+                    return null;
                   }
-                  return null;
-                }
-              }}
-              route={{
-                params: {
-                  selectedFoods: currentMealLogItems,
-                  defaultMealName: currentMealLogItems.length === 1 ? currentMealLogItems[0].name : "",
-                  onMealLogged: () => {
-                    // Clear the cart items
-                    setCurrentMealLogItems([]);
-                  }
-                },
-              }}
+                }}
+                route={{
+                  params: {
+                    selectedFoods: currentMealLogItems,
+                    defaultMealName: currentMealLogItems.length === 1 ? currentMealLogItems[0].name : "",
+                    onMealLogged: forceClearCart,
+                    clearCart: forceClearCart
+                  },
+                }}
+              />
+            </Animated.View>
+          )}
+          
+          {/* Add Food Options Modal */}
+          {showAddFoodOptionsScreen && (
+            <Animated.View style={[styles.fullScreenModal, { transform: [{ translateX: addFoodOptionsTranslate }] }]}>
+              <AddFoodOptionsScreen
+                navigation={{
+                  navigate: (screen, params) => {
+                    if (screen === "AddCustomFood") {
+                      handleOpenAddOrEditCustomFood()
+                      handleCloseAddFoodOptions()
+                    } else if (screen === "SavedMeals") {
+                      setShowSavedMealsScreen(true)
+                      handleCloseAddFoodOptions()
+                    } else {
+                      console.log(`Navigation to ${screen} not implemented`)
+                    }
+                  },
+                  goBack: handleCloseAddFoodOptions,
+                }}
+              />
+            </Animated.View>
+          )}
+          
+          {/* Add Custom Food Screen */}
+          {showAddCustomFoodScreen && (
+            <Animated.View style={[styles.fullScreenModal, { transform: [{ translateX: addCustomFoodTranslate }] }]}>
+              <AddCustomFoodScreen
+                navigation={{
+                  navigate: (screen, params) => {
+                    console.log(`Navigation to ${screen} not implemented`)
+                  },
+                  goBack: handleCloseAddCustomFood,
+                  save: handleSaveOrUpdateCustomFood,
+                }}
+                route={{
+                  params: {
+                    foodToEdit: foodToEdit as any,
+                  },
+                }}
+              />
+            </Animated.View>
+          )}
+          
+          {/* Saved Meals Screen */}
+          {showSavedMealsScreen && (
+            <SavedMealsScreen onClose={() => setShowSavedMealsScreen(false)} onSelectMeal={handleSelectSavedMeal} />
+          )}
+
+          {/* Toast messages component */}
+          <Toast />
+
+          {/* Bottom Navigation (only visible on certain screens) */}
+          {isFooterVisible && (
+            <AnimatedFooter
+              isVisible={isFooterVisible}
+              onAddPress={handleOpenAddMealLog}
+              onRocketPress={handleOpenRocket}
+              onStatsPress={handleOpenStats}
+              onQuickAddPress={handleQuickAddFood}
             />
           )}
-        </Animated.View>
-
-        {/* Saved Meals Screen */}
-        {showSavedMealsScreen && (
-          <SavedMealsScreen onClose={() => setShowSavedMealsScreen(false)} onSelectMeal={handleSelectSavedMeal} />
-        )}
-      </ImageBackground>
-
-      {/* Toast messages component */}
-      <Toast />
-    </View>
+        </ImageBackground>
+      )}
+    </SafeAreaProvider>
   )
 }
 
@@ -585,6 +614,11 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 18,
     marginTop: 10,
+  },
+  screen: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
 })
 

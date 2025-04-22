@@ -141,7 +141,7 @@ export const styles = StyleSheet.create({
     height: 5,
     backgroundColor: colors.handleBar,
     borderRadius: 3,
-    marginTop: 2.1,
+    marginTop: 0,
   },
   peekContent: {
     alignItems: 'center',

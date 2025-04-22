@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
-import { View, Text, ScrollView, Dimensions, TouchableOpacity, StyleSheet } from "react-native"; // Added StyleSheet
-import { MealComponent } from "../meal/MealComponent"; // Adjust path if needed
+import { View, Text, Animated, Dimensions, TouchableOpacity, StyleSheet } from "react-native";
+import { MealComponent } from "../meal/MealComponent";
 import { styles } from "./MealViewerStyles"; 
 const { height } = Dimensions.get("window");
 
@@ -48,29 +48,28 @@ export const MealViewer: React.FC<MealViewerProps> = ({
   canLoadMore,
   onMealPress,
 }) => {
+  // Use Animated.Value for better performance
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const scrollViewRef = useRef<any>(null);
+  
+  // Track raw scroll position using state
   const [scrollPosition, setScrollPosition] = useState(0);
-  const scrollViewRef = useRef<ScrollView>(null);
-
+  
   // Define constants related to layout
-  const bottomSheetVisibleHeightRatio = 0.6; // The portion of the screen the sheet wrapper takes initially
-  const topContainerMarginTopRatio = 0.47; // The margin-top of the *first* top container relative to the sheet height
-
-  const bottomSheetHeight = height * bottomSheetVisibleHeightRatio; // Actual height of the scrollable wrapper
-  const firstTopContainerOffset = bottomSheetHeight * topContainerMarginTopRatio; // Calculate the offset where the first container starts
-
-  // Show shadow when scroll position goes beyond the initial top offset of the *first* summary container
-  const shouldShowTopShadow = scrollPosition > firstTopContainerOffset;
-
-  const handleScroll = (event: any) => {
-    const offsetY = event.nativeEvent.contentOffset.y;
-    // Don't change footer visibility based on scroll
-    setScrollPosition(offsetY);
-  };
+  const bottomSheetVisibleHeightRatio = 0.6;
+  const topContainerMarginTopRatio = 0.47;
+  const bottomSheetHeight = height * bottomSheetVisibleHeightRatio;
+  const firstTopContainerOffset = bottomSheetHeight * topContainerMarginTopRatio;
 
   // Always keep footer visible
   useEffect(() => {
     onFooterVisibilityChange(true);
   }, []);
+
+  // Handle scroll events to update scroll position
+  const handleScroll = (event) => {
+    setScrollPosition(event.nativeEvent.contentOffset.y);
+  };
 
   const calculateRemainingCalories = (consumed: number, goal: number): string => {
     const remaining = goal - consumed;
@@ -78,36 +77,56 @@ export const MealViewer: React.FC<MealViewerProps> = ({
   };
 
   const calculateProgress = (consumed: number, goal: number): number => {
-    if (goal <= 0) return 0; // Prevent division by zero or negative goals
+    if (goal <= 0) return 0;
     return Math.min(1, Math.max(0, consumed / goal));
   };
 
+  // Opacity for the fixed top shadow (appears when scrolled past the threshold)
+  const fixedShadowOpacity = scrollY.interpolate({
+    inputRange: [firstTopContainerOffset - 1, firstTopContainerOffset],
+    outputRange: [0, 1], // Instant transition 0 -> 1
+    extrapolate: 'clamp'
+  });
+
+  // Opacity for the handle bar inside the scroll view (disappears when scrolled past threshold)
+  const scrollableHandleOpacity = scrollY.interpolate({
+    inputRange: [firstTopContainerOffset - 1, firstTopContainerOffset],
+    outputRange: [1, 0], // Instant transition 1 -> 0
+    extrapolate: 'clamp'
+  });
+
   return (
     <View style={styles.bottomSheetWrapper}>
-       {/* Top Shadow - Rendered conditionally based on the corrected logic */}
-      {shouldShowTopShadow && (
-        <View style={styles.bottomSheetTopShadow}>
-          {/* Ensure handleBar style exists and is correct */}
-          <View style={[styles.handleBar, { marginTop: -1 }]} />
-        </View>
-      )}
-      <ScrollView
+      {/* Fixed Top Shadow - Always rendered, opacity controlled */}
+      <Animated.View 
+        style={[
+          styles.bottomSheetTopShadow, // Base styles (background, radius, height)
+          {
+            opacity: fixedShadowOpacity, // Animated opacity
+            zIndex: 20 // Ensure it's above scroll content
+          }
+        ]}
+        pointerEvents="none" // Make it non-interactive
+      >
+        {/* Handle bar within the fixed shadow */}
+        <View style={styles.handleBar} />
+      </Animated.View>
+
+      <Animated.ScrollView
         ref={scrollViewRef}
         style={styles.bottomSheetScrollView}
-        // *** FIX: Adjust contentContainerStyle minHeight if needed ***
-        // It should be large enough to allow scrolling past the first element trigger the shadow
-        // If bottomSheetHeight is height * 0.6, and first element offset is 0.4 * (height * 0.6),
-        // the content needs to be taller than the visible scroll view area.
-        contentContainerStyle={[styles.bottomSheetContent, { minHeight: height }]} // Ensure minimum height allows scrolling
+        contentContainerStyle={[styles.bottomSheetContent, { minHeight: height }]}
         bounces={true}
         alwaysBounceVertical={true}
         decelerationRate="normal"
         showsVerticalScrollIndicator={false}
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
+        scrollEventThrottle={1} // Use 1 for highest fidelity
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true } // Use native driver for performance
+        )}
         overScrollMode="always"
       >
-        {/* Map over each day's data */}
         {daysData.map((day, index) => {
           const proteinProgress = calculateProgress(day.proteinConsumed, day.proteinGoal);
           const carbsProgress = calculateProgress(day.carbsConsumed, day.carbsGoal);
@@ -121,19 +140,26 @@ export const MealViewer: React.FC<MealViewerProps> = ({
                 style={[
                   styles.topContainer,
                   {
-                    // *** FIX: Use the calculated offset for the first item's margin ***
                     marginTop: index === 0 ? firstTopContainerOffset : 0,
-                    // Keep consistent border radius or adjust if needed
                     borderTopLeftRadius: 15,
                     borderTopRightRadius: 15,
                   },
                 ]}
               >
-                <View style={styles.bottomSheetHandle}>
-                  {/* Show handle only on the very first container when not scrolled past its initial position */}
-                  {index === 0 && scrollPosition <= firstTopContainerOffset && <View style={styles.handleBar} />}
-                </View>
-                <View style={[styles.peekContent, { paddingTop: 5 }]}>
+                {/* Handle Container inside ScrollView - Opacity controlled */}
+                {index === 0 && (
+                  <Animated.View 
+                    style={[
+                      styles.bottomSheetHandle, // Container for positioning
+                      { opacity: scrollableHandleOpacity } // Animated opacity
+                    ]}
+                  >
+                    {/* The actual handle bar element */}
+                    <View style={styles.handleBar} />
+                  </Animated.View>
+                )}
+                
+                <View style={[styles.peekContent, { paddingTop: index === 0 ? 5 : 30 }]}>
                   <View style={styles.calorieSection}>
                     <Text style={styles.calorieTitle}>{remainingCalories}</Text>
                     <Text style={styles.calorieSubtitle}>REMAINING</Text>
@@ -223,7 +249,7 @@ export const MealViewer: React.FC<MealViewerProps> = ({
 
         {/* Final padding */}
         <View style={{ height: 80 }} />
-      </ScrollView>
+      </Animated.ScrollView>
     </View>
   );
 };

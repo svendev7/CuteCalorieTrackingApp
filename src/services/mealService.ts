@@ -15,7 +15,8 @@ import {
   getDoc,
   arrayUnion,
   arrayRemove,
-  DocumentReference
+  DocumentReference,
+  writeBatch
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
@@ -300,6 +301,7 @@ export const toggleMealFavorite = async (mealId: string, isFavorite: boolean): P
 
 /**
  * Get user's foods by type (recent, created, favorite)
+ * Note: This implementation completely ignores addedToCart status to prevent cart persistence issues
  */
 export const getUserFoodsByType = async (userId: string, type: string): Promise<FoodData[]> => {
   try {
@@ -308,10 +310,10 @@ export const getUserFoodsByType = async (userId: string, type: string): Promise<
     
     switch(type) {
       case 'recent':
-        // Get most recently added to cart foods
+        // Changed: Get only foods that have been used recently by lastUsed timestamp,
+        // Never consider addedToCart status
         q = query(
-          userFoodsRef, 
-          where('addedToCart', '==', true),
+          userFoodsRef,
           orderBy('lastUsed', 'desc'),
           limit(10)
         );
@@ -334,6 +336,8 @@ export const getUserFoodsByType = async (userId: string, type: string): Promise<
     
     querySnapshot.forEach((doc) => {
       const data = doc.data() as Omit<FoodData, 'id'>;
+      
+      // Force addedToCart to be false for every food, but keep the rest of the properties
       foods.push({
         id: doc.id,
         name: data.name || '',
@@ -341,7 +345,9 @@ export const getUserFoodsByType = async (userId: string, type: string): Promise<
         carbs: data.carbs || 0,
         fat: data.fat || 0,
         calories: data.calories || 0,
-        ...data
+        ...data,
+        // Override addedToCart regardless of what it was in the DB
+        addedToCart: false
       });
     });
     
@@ -444,5 +450,86 @@ export const updateFoodCartStatus = async (userId: string, foodId: string, added
   } catch (error) {
     console.error('Error updating food cart status:', error);
     throw error;
+  }
+};
+
+/**
+ * Clears cart status for all foods belonging to a user
+ */
+export const clearAllCartItems = async (userId: string): Promise<boolean> => {
+  try {
+    if (!userId) {
+      console.error('No user ID provided to clearAllCartItems');
+      return false;
+    }
+    
+    const foodsRef = collection(db, 'users', userId, 'foods');
+    const q = query(foodsRef, where('addedToCart', '==', true));
+    const querySnapshot = await getDocs(q);
+    
+    // Create a batch for better performance with multiple updates
+    const batch = writeBatch(db);
+    
+    querySnapshot.docs.forEach(docSnapshot => {
+      const foodRef = doc(db, 'users', userId, 'foods', docSnapshot.id);
+      batch.update(foodRef, {
+        addedToCart: false,
+        lastUsed: serverTimestamp()
+      });
+    });
+    
+    // Commit the batch
+    await batch.commit();
+    console.log(`Successfully cleared cart status for ${querySnapshot.docs.length} items`);
+    return true;
+  } catch (error) {
+    console.error('Error clearing all cart items:', error);
+    return false;
+  }
+};
+
+/**
+ * Forcefully clears ALL cart items for a user, regardless of current status
+ * This is more aggressive than clearAllCartItems and will update every food in the user's collection
+ */
+export const forceResetAllCartItems = async (userId: string): Promise<boolean> => {
+  if (!userId) {
+    console.error('No user ID provided to forceResetAllCartItems');
+    return false;
+  }
+  
+  try {
+    console.log('⚠️ FORCE RESETTING all cart items for user:', userId);
+    
+    // Get ALL user foods, not just ones marked as in cart
+    const foodsRef = collection(db, 'users', userId, 'foods');
+    const querySnapshot = await getDocs(foodsRef);
+    
+    if (querySnapshot.empty) {
+      console.log('No foods found for user');
+      return true;
+    }
+    
+    // Create a batch for better performance with multiple updates
+    const batch = writeBatch(db);
+    let updatedCount = 0;
+    
+    // Update ALL foods to set addedToCart = false
+    querySnapshot.docs.forEach(docSnapshot => {
+      const foodRef = doc(db, 'users', userId, 'foods', docSnapshot.id);
+      batch.update(foodRef, {
+        addedToCart: false,
+        lastUsed: serverTimestamp()
+      });
+      updatedCount++;
+    });
+    
+    // Commit the batch
+    await batch.commit();
+    console.log(`🧹 FORCE RESET: Updated ${updatedCount} food items to not be in cart`);
+    return true;
+  } catch (error) {
+    console.error('❌ Error in forceResetAllCartItems:', error);
+    return false;
   }
 }; 

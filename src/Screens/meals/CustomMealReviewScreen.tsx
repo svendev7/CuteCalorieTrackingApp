@@ -20,15 +20,17 @@ import {
   Animated,
   ActivityIndicator,
   Switch,
+  Alert,
 } from "react-native"
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons"
 import { auth, db } from "../../config/firebase"
-import { addMeal } from "../../services/mealService"
+import { addMeal, clearAllCartItems, forceResetAllCartItems } from "../../services/mealService"
 import { generateMealName } from "../../services/aiService"
 import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore"
 import Toast from 'react-native-toast-message'
 import * as ImagePicker from 'expo-image-picker'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 const { width, height } = Dimensions.get("window")
 
@@ -51,6 +53,30 @@ interface CustomMealReviewScreenProps {
   route: any
 }
 
+// Simple success popup component
+const SuccessPopup = ({ visible, message, onDismiss }) => {
+  // Instead of early return, use useEffect conditionally
+  useEffect(() => {
+    if (visible) {
+      const timer = setTimeout(() => {
+        onDismiss();
+      }, 2000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [visible, onDismiss]);
+  
+  // Return JSX conditionally instead of null
+  return visible ? (
+    <View style={styles.popupContainer}>
+      <View style={styles.popup}>
+        <Ionicons name="checkmark-circle" size={24} color="#45A557" />
+        <Text style={styles.popupText}>{message}</Text>
+      </View>
+    </View>
+  ) : null;
+};
+
 export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ navigation, route }) => {
   const initialFoods = route.params?.selectedFoods || route.params?.items || [];
   const defaultMealName = route.params?.defaultMealName || '';
@@ -68,6 +94,11 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
   const [showAiSuggestionModal, setShowAiSuggestionModal] = useState(false);
   const [aiMealNameSuggestion, setAiMealNameSuggestion] = useState('');
   const [disableAiSuggestions, setDisableAiSuggestions] = useState(false);
+  
+  const [showSuccessPopup, setShowSuccessPopup] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  
+  const insets = useSafeAreaInsets();
   
   // Check user preference for AI suggestions on component mount
   useEffect(() => {
@@ -212,6 +243,141 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
     setFoods(updatedFoods);
   };
 
+  const showSuccess = (message: string) => {
+    setSuccessMessage(message);
+    setShowSuccessPopup(true);
+    // Will auto-dismiss via the SuccessPopup useEffect
+  };
+
+  // Add a direct effect to clear cart on component unmount
+  useEffect(() => {
+    return () => {
+      // This will run when the component is unmounted/destroyed
+      if (auth.currentUser) {
+        console.log("🧨 CustomMealReviewScreen UNMOUNTING: Final cart clear attempt");
+        forceResetAllCartItems(auth.currentUser.uid)
+          .catch(err => console.error("Error in unmount cart clear:", err));
+      }
+    };
+  }, []);
+
+  const handleLogMeal = async () => {
+    if (!auth.currentUser) {
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'You must be logged in to log a meal',
+      })
+      return
+    }
+
+    if (foods.length === 0) {
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Please add at least one food to log',
+      })
+      return
+    }
+
+    try {
+      console.log("💾 LOG MEAL: Starting aggressive cart clearing process");
+      setIsSaving(true)
+      const totalMacros = calculateTotalMacros()
+      
+      // Make a copy of the foods array before clearing it
+      const foodsCopy = [...foods];
+      
+      // Clear local cart state immediately to prevent it from reappearing
+      setFoods([]);
+      
+      // Directly clear cart in Firestore for current user - BEFORE adding the meal
+      try {
+        if (auth.currentUser) {
+          console.log("Forcing reset of ALL cart items before adding meal");
+          await forceResetAllCartItems(auth.currentUser.uid);
+        }
+      } catch (clearError) {
+        console.error("Error clearing cart in Firestore:", clearError);
+      }
+      
+      // Log the meal to Firestore
+      await addMeal({
+        userId: auth.currentUser.uid,
+        mealName: mealName || foodsCopy[0].name,
+        protein: totalMacros.protein,
+        carbs: totalMacros.carbs,
+        fat: totalMacros.fat,
+        calories: totalMacros.calories,
+        sugar: totalMacros.sugar,
+        fibers: totalMacros.fibers,
+        sodium: totalMacros.sodium,
+        date: new Date().toISOString().split('T')[0],
+        foods: foodsCopy.map(food => ({
+          id: food.id,
+          name: food.name,
+          protein: food.protein,
+          carbs: food.carbs,
+          fat: food.fat,
+          calories: food.calories,
+          sodium: food.sodium || 0,
+          sugar: food.sugar || 0,
+          fibers: food.fibers || 0,
+          amount: food.amount || 100,
+          unit: food.unit || 'g'
+        })),
+        imageUrl: mealImage,
+        isCustom: false,
+        isLogged: true
+      })
+      
+      // Clear cart AGAIN after adding meal
+      try {
+        if (auth.currentUser) {
+          console.log("Forcing reset of ALL cart items AFTER adding meal");
+          await forceResetAllCartItems(auth.currentUser.uid);
+        }
+      } catch (clearError) {
+        console.error("Error clearing cart in Firestore:", clearError);
+      }
+      
+      // Collect all cart clearing callbacks
+      const clearCartCallbacks = [
+        route.params?.onMealLogged, 
+        route.params?.clearCart,
+        navigation.getParam ? navigation.getParam('onMealLogged') : null
+      ];
+      
+      // Call all possible cart clearing functions immediately
+      for (const callback of clearCartCallbacks) {
+        if (typeof callback === 'function') {
+          try {
+            await callback();
+            console.log('Successfully called cart clearing callback');
+          } catch (err) {
+            console.log('Error calling cart clear callback:', err);
+          }
+        }
+      }
+      
+      // Show success popup
+      showSuccess('Meal Logged Successfully');
+      
+      // Navigate back quickly to prevent any delays that might cause cart issues
+      setTimeout(() => {
+        if (navigation && typeof navigation.goBack === 'function') {
+          navigation.goBack();
+        }
+      }, 300);
+    } catch (error) {
+      console.error('Error logging meal:', error);
+      // Show error popup
+      showSuccess('Failed to log meal');
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   const handleConfirmPress = async () => {
     if (!auth.currentUser) {
       Toast.show({
@@ -241,8 +407,26 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
     }
 
     try {
+      console.log("💾 CONFIRM MEAL: Starting aggressive cart clearing process");
       setIsSaving(true)
       const totalMacros = calculateTotalMacros()
+      
+      // Make a copy of the foods array before clearing it
+      const foodsCopy = [...foods];
+      
+      // Clear local state immediately
+      setFoods([]);
+      
+      // Directly clear cart in Firestore BEFORE adding meal
+      try {
+        if (auth.currentUser) {
+          console.log("Forcing reset of ALL cart items before saving meal");
+          await forceResetAllCartItems(auth.currentUser.uid);
+        }
+      } catch (clearError) {
+        console.error("Error clearing cart in Firestore:", clearError);
+      }
+      
       const newMeal = {
         userId: auth.currentUser.uid,
         mealName: mealName,
@@ -254,207 +438,7 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
         fibers: totalMacros.fibers,
         sodium: totalMacros.sodium,
         date: new Date().toISOString().split('T')[0],
-        foods: foods.map(food => ({
-          id: food.id,
-          name: food.name,
-          protein: food.protein,
-          carbs: food.carbs,
-          fat: food.fat,
-          calories: food.calories,
-          sodium: food.sodium || 0,
-          sugar: food.sugar || 0,
-          fibers: food.fibers || 0,
-          amount: food.amount || 100,
-          unit: food.unit || 'g'
-        })),
-        mealType: 'breakfast',
-        createdAt: new Date().toISOString(),
-        isCustom: true
-      }
-
-      await addMeal(newMeal)
-      
-      Toast.show({
-        type: 'success',
-        text1: 'Success',
-        text2: 'Meal has been successfully logged',
-      })
-      
-      // Refresh the HomeScreen view
-      const homeScreen = navigation.getParent()?.getState().routes.find(
-        route => route.name === 'HomeTabs' || route.name === 'Home'
-      )
-      
-      if (homeScreen?.params?.refreshHomeScreen) {
-        homeScreen.params.refreshHomeScreen()
-      } else if (navigation.getParent()?.refreshHomeScreen) {
-        navigation.getParent().refreshHomeScreen()
-      } else if (navigation.refreshHomeScreen) {
-        navigation.refreshHomeScreen()
-      }
-      
-      // Navigate back with a slight delay to allow Firebase to update
-      setTimeout(() => {
-        navigation.goBack()
-      }, 100)
-      
-    } catch (error) {
-      console.error('Error logging meal:', error)
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Failed to log meal. Please try again.',
-      })
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  const handleLogPress = async () => {
-    if (foods.length === 0) {
-      return
-    }
-    
-    // Validate meal name
-    if (!mealName.trim()) {
-      Toast.show({
-        type: 'error',
-        text1: 'Name Required',
-        text2: 'Please enter a name for your meal'
-      })
-      return
-    }
-    
-    try {
-      setIsSaving(true)
-      const currentUser = auth.currentUser
-      if (!currentUser) {
-        Toast.show({
-          type: 'error',
-          text1: 'Authentication Error',
-          text2: 'You must be logged in to perform this action'
-        })
-        setIsSaving(false)
-        return
-      }
-      
-      const totalMacros = calculateTotalMacros()
-      
-      // Create a meal and log it
-      await addMeal({
-        userId: currentUser.uid,
-        mealName: mealName, // Use the required meal name
-        protein: totalMacros.protein,
-        carbs: totalMacros.carbs,
-        fat: totalMacros.fat,
-        calories: totalMacros.calories,
-        sugar: totalMacros.sugar,
-        fibers: totalMacros.fibers,
-        sodium: totalMacros.sodium,
-        date: new Date().toISOString().split('T')[0],
-        loggedTime: new Date().toISOString(),
-        foods: foods.map(food => ({
-          id: food.id,
-          name: food.name,
-          protein: food.protein,
-          carbs: food.carbs,
-          fat: food.fat,
-          calories: food.calories,
-          sodium: food.sodium || 0,
-          sugar: food.sugar || 0,
-          fibers: food.fibers || 0,
-          amount: food.amount || 100,
-          unit: food.unit || 'g'
-        })),
-        imageUrl: mealImage, // Use the selected image if available
-        isCustom: false,
-        isLogged: true
-      })
-      
-      // Call the callback to clear the cart in AddMealLogScreen
-      const onMealLogged = navigation.getParam ? navigation.getParam('onMealLogged') : 
-                          route.params?.onMealLogged;
-      
-      if (typeof onMealLogged === 'function') {
-        onMealLogged();
-      }
-      
-      // Refresh the HomeScreen view
-      const homeScreen = navigation.getParent()?.getState()?.routes?.find(
-        route => route.name === 'HomeTabs' || route.name === 'Home'
-      )
-      
-      if (homeScreen?.params?.refreshHomeScreen) {
-        homeScreen.params.refreshHomeScreen()
-      } else if (navigation.getParent()?.refreshHomeScreen) {
-        navigation.getParent().refreshHomeScreen()
-      } else if (navigation.refreshHomeScreen) {
-        navigation.refreshHomeScreen()
-      }
-      
-      Toast.show({
-        type: 'success',
-        text1: 'Meal Logged',
-        text2: 'Your meal has been logged successfully'
-      });
-      
-      navigation.goBack();
-    } catch (error) {
-      console.error('Error logging meal:', error)
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Failed to log meal'
-      })
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  const handleLogAndSavePress = async () => {
-    if (foods.length === 0) {
-      return
-    }
-    
-    // Validate meal name
-    if (!mealName.trim()) {
-      Toast.show({
-        type: 'error',
-        text1: 'Name Required',
-        text2: 'Please enter a name for your meal'
-      })
-      return
-    }
-    
-    try {
-      setIsSaving(true)
-      const currentUser = auth.currentUser
-      if (!currentUser) {
-        Toast.show({
-          type: 'error',
-          text1: 'Authentication Error',
-          text2: 'You must be logged in to perform this action'
-        })
-        setIsSaving(false)
-        return
-      }
-      
-      const totalMacros = calculateTotalMacros()
-      
-      // Create a new meal object with isCustom: true
-      await addMeal({
-        userId: currentUser.uid,
-        mealName: mealName, // Use the required meal name
-        protein: totalMacros.protein,
-        carbs: totalMacros.carbs,
-        fat: totalMacros.fat,
-        calories: totalMacros.calories,
-        sugar: totalMacros.sugar,
-        fibers: totalMacros.fibers,
-        sodium: totalMacros.sodium,
-        date: new Date().toISOString().split('T')[0],
-        loggedTime: new Date().toISOString(),
-        foods: foods.map(food => ({
+        foods: foodsCopy.map(food => ({
           id: food.id,
           name: food.name,
           protein: food.protein,
@@ -469,46 +453,97 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
         })),
         imageUrl: mealImage,
         isCustom: true
-      })
-      
-      // Call the callback to clear the cart in AddMealLogScreen
-      const onMealLogged = navigation.getParam ? navigation.getParam('onMealLogged') : 
-                          route.params?.onMealLogged;
-                          
-      if (typeof onMealLogged === 'function') {
-        onMealLogged();
       }
       
-      // React Native doesn't support window or CustomEvent
-      // The onMealLogged callback will handle cart clearing
+      await addMeal(newMeal)
       
-      // Refresh the HomeScreen view
-      const homeScreen = navigation.getParent()?.getState()?.routes?.find(
-        route => route.name === 'HomeTabs' || route.name === 'Home'
-      )
-      
-      if (homeScreen?.params?.refreshHomeScreen) {
-        homeScreen.params.refreshHomeScreen()
-      } else if (navigation.getParent()?.refreshHomeScreen) {
-        navigation.getParent().refreshHomeScreen()
-      } else if (navigation.refreshHomeScreen) {
-        navigation.refreshHomeScreen()
+      // Directly clear cart in Firestore AFTER adding meal
+      try {
+        if (auth.currentUser) {
+          console.log("Forcing reset of ALL cart items AFTER saving meal");
+          await forceResetAllCartItems(auth.currentUser.uid);
+        }
+      } catch (clearError) {
+        console.error("Error clearing cart in Firestore:", clearError);
       }
       
-      Toast.show({
-        type: 'success',
-        text1: 'Meal Saved',
-        text2: 'Your meal has been logged and saved'
-      })
+      // Get the callbacks for clearing cart 
+      const onMealLogged = route.params?.onMealLogged;
+      const clearCart = route.params?.clearCart;
       
-      navigation.goBack()
+      // Call all possible cart clearing functions
+      const clearCartCallbacks = [onMealLogged, clearCart];
+      
+      for (const callback of clearCartCallbacks) {
+        if (typeof callback === 'function') {
+          try {
+            await callback();
+            console.log('Successfully called cart clearing callback');
+          } catch (err) {
+            console.log('Error calling cart clear callback:', err);
+          }
+        }
+      }
+      
+      // Try to get the navigation reference to force clear cart
+      try {
+        if (navigation && navigation.getParam) {
+          const paramCallback = navigation.getParam('onMealLogged');
+          if (typeof paramCallback === 'function') {
+            try {
+              await paramCallback();
+              console.log('Successfully called navigation param callback');
+            } catch (err) {
+              console.log('Error with navigation param callback:', err);
+            }
+          }
+        }
+      } catch (err) {
+        console.log('Error with navigation.getParam:', err);
+      }
+      
+      // Final cleanup for absolute certainty
+      try {
+        if (auth.currentUser) {
+          console.log("Final cart cleanup before navigation");
+          await forceResetAllCartItems(auth.currentUser.uid);
+        }
+      } catch (error) {
+        console.error("Error in final cart cleanup:", error);
+      }
+      
+      // Refresh the HomeScreen view (if possible)
+      try {
+        if (typeof navigation.getParent === 'function') {
+          const parent = navigation.getParent();
+          if (parent && typeof parent.getState === 'function') {
+            const homeScreen = parent.getState().routes?.find(
+              route => route.name === 'HomeTabs' || route.name === 'Home'
+            );
+            
+            if (homeScreen?.params?.refreshHomeScreen) {
+              homeScreen.params.refreshHomeScreen();
+            }
+          }
+        } else if (navigation.refreshHomeScreen) {
+          navigation.refreshHomeScreen();
+        }
+      } catch (navError) {
+        // Non-critical error, just log it and continue
+        console.log('Navigation refresh error (non-critical):', navError);
+      }
+      
+      // Show success popup
+      showSuccess('Meal Logged and Saved');
+      
+      // Navigate back quickly to prevent any cart issue
+      setTimeout(() => {
+        navigation.goBack();
+      }, 300);
     } catch (error) {
       console.error('Error saving meal:', error)
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Failed to save meal'
-      })
+      // Show error popup
+      showSuccess('Failed to save meal');
     } finally {
       setIsSaving(false)
     }
@@ -522,14 +557,14 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
         totals.carbs += (food.carbs || 0) * multiplier;
         totals.fat += (food.fat || 0) * multiplier;
         totals.calories += (food.calories || 0) * multiplier;
-        totals.sodium += (food.sodium || 0) * multiplier;
         totals.sugar += (food.sugar || 0) * multiplier;
         totals.fibers += (food.fibers || 0) * multiplier;
+        totals.sodium += (food.sodium || 0) * multiplier;
         return totals;
       },
-      { protein: 0, carbs: 0, fat: 0, calories: 0, sodium: 0, sugar: 0, fibers: 0 },
-    )
-  }
+      { protein: 0, carbs: 0, fat: 0, calories: 0, sugar: 0, fibers: 0, sodium: 0 }
+    );
+  };
 
   const totalMacros = calculateTotalMacros()
 
@@ -809,8 +844,15 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top }]}>
       <View style={styles.modalView}>
+        {/* Success Popup */}
+        <SuccessPopup 
+          visible={showSuccessPopup} 
+          message={successMessage} 
+          onDismiss={() => setShowSuccessPopup(false)}
+        />
+        
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color="#EDEDED" />
@@ -976,7 +1018,7 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
 
         <View style={styles.footer}>
           <TouchableOpacity 
-            onPress={handleLogPress} 
+            onPress={handleLogMeal} 
             style={[styles.logButton, foods.length === 0 && styles.disabledButton, isSaving && styles.disabledButton]}
             disabled={foods.length === 0 || isSaving}
           >
@@ -987,7 +1029,7 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
             )}
           </TouchableOpacity>
           <TouchableOpacity 
-            onPress={handleLogAndSavePress} 
+            onPress={handleConfirmPress} 
             style={[styles.logAndSaveButton, foods.length === 0 && styles.disabledButton, isSaving && styles.disabledButton]}
             disabled={foods.length === 0 || isSaving}
           >
@@ -1646,6 +1688,34 @@ const styles = StyleSheet.create({
   aiPreferenceText: {
     color: '#A0A0A0',
     fontSize: 14,
+  },
+  popupContainer: {
+    position: 'absolute',
+    top: '50%',
+    left: 0,
+    right: 0,
+    zIndex: 1000,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  popup: {
+    backgroundColor: '#333333',
+    borderRadius: 8,
+    padding: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  popupText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    marginLeft: 10,
+    fontWeight: '500',
   },
 })
 

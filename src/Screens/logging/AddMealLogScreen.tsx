@@ -31,6 +31,8 @@ import {
   updateFoodCartStatus,
   addMeal,
   deleteMeal,
+  clearAllCartItems,
+  forceResetAllCartItems,
 } from "../../services/mealService"
 import { Swipeable, GestureHandlerRootView } from "react-native-gesture-handler"
 
@@ -82,6 +84,7 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
   const [selectedFood, setSelectedFood] = useState<FoodItem | MealItem | null>(null)
   const [quantity, setQuantity] = useState("100")
   const [unit, setUnit] = useState("g")
+  const [isLoggingSingleItem, setIsLoggingSingleItem] = useState(false)
   const modalOffset = useRef(new Animated.Value(0)).current
   const tabIndicatorPosition = useRef(new Animated.Value(0)).current
   const filterIndicatorPosition = useRef(new Animated.Value(0)).current
@@ -139,6 +142,44 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
   useEffect(() => {
     fetchMeals()
   }, [activeFilter])
+
+  // Add a navigation focus listener to refresh data when returning to this screen
+  useEffect(() => {
+    // Create a focus listener that forces a refresh and clears the cart completely
+    const unsubscribe = navigation.addListener?.('focus', () => {
+      console.log("🚨 SCREEN FOCUSED: Aggressively clearing cart state");
+      
+      // Clear local cart state immediately
+      setCurrentMealItems([]);
+      setSelectedItems([]);
+      setCartCount(0);
+      
+      // Force clear any lingering cart items in Firestore before refreshing
+      const forceClearAndRefresh = async () => {
+        try {
+          const currentUser = auth.currentUser;
+          if (currentUser) {
+            // Use the more aggressive cart reset function
+            await forceResetAllCartItems(currentUser.uid);
+            
+            // Then refresh the data
+            fetchMeals();
+          }
+        } catch (error) {
+          console.error("Error clearing cart on screen focus:", error);
+        }
+      };
+      
+      forceClearAndRefresh();
+    });
+    
+    // Clean up the listener on unmount
+    return () => {
+      if (unsubscribe) {
+        unsubscribe.remove?.();
+      }
+    };
+  }, [navigation]);
 
   const fetchMeals = async () => {
     try {
@@ -258,6 +299,9 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
       useNativeDriver: false,
     }).start()
     
+    // Remove special handling for Foods tab
+    setSearchBarSticky(false)
+    
     // Fetch data when tab changes
     fetchMeals()
   }
@@ -275,6 +319,9 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
     }).start()
     
     setActiveFilter(filterName)
+    
+    // Remove special handling for Recent tab
+    setSearchBarSticky(false)
   }
 
   const handleAddItemToMeal = (item: FoodItem | MealItem, selectedQuantity = "100", selectedUnit = "g") => {
@@ -833,10 +880,14 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
     navigation.navigate("AddFoodOptions")
   }
 
-  const [isLoggingSingleItem, setIsLoggingSingleItem] = useState(false);
-
-  // Enhanced cart clearing function
-  const clearCart = useCallback(() => {
+  // Function to clear the cart completely (improved version)
+  const clearCart = useCallback(async () => {
+    console.log("🧹 MANUAL CART CLEAR: Aggressive cart clearing initiated");
+    
+    // First make a copy of the current meal items for Firebase updates
+    const itemsToClear = [...currentMealItems];
+    
+    // Clear local state immediately for better UX
     setCurrentMealItems([]);
     setSelectedItems([]);
     setCartCount(0);
@@ -845,82 +896,38 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
     try {
       const currentUser = auth.currentUser;
       if (currentUser) {
-        // Update cart status for all items in currentMealItems
-        currentMealItems.forEach(item => {
-          updateFoodCartStatus(currentUser.uid, item.id, false)
-            .catch(err => console.error("Error updating cart status:", err));
-        });
+        console.log("Calling forceResetAllCartItems for user:", currentUser.uid);
+        
+        // Use our new aggressive cart clearing function
+        await forceResetAllCartItems(currentUser.uid);
+        
+        // Force a refresh of the data to ensure UI is in sync with backend
+        setTimeout(() => {
+          fetchMeals();
+        }, 100);
       }
     } catch (error) {
       console.error("Error clearing cart in Firebase:", error);
     }
-  }, [currentMealItems]);
+  }, [currentMealItems, fetchMeals]);
 
   const handleContinuePress = () => {
     if (selectedItems.length === 0) {
+      Alert.alert("Empty Meal", "Please add at least one item to your meal.")
       return
     }
 
-    if (selectedItems.length === 1) {
-      // Direct logging for single item
-      const item = selectedItems[0]
-      const currentUser = auth.currentUser
-      
-      if (!currentUser) {
-        Alert.alert("Error", "You must be logged in to log meals")
-        return
-      }
-      
-      // Show loading indicator
-      setIsLoggingSingleItem(true)
-      
-      try {
-        // Create a meal with the item's name and data
-        const now = new Date()
-        const today = now.toISOString().split('T')[0]
-        const timeString = now.toLocaleTimeString()
-        
-        const mealData = {
-          userId: currentUser.uid,
-          mealName: item.name, // Use the food/meal name as meal name
-          protein: item.protein * (item.amount / 100),
-          carbs: item.carbs * (item.amount / 100),
-          fat: item.fat * (item.amount / 100),
-          calories: item.calories * (item.amount / 100),
-          sugar: (item.sugar || 0) * (item.amount / 100),
-          fibers: (item.fibers || 0) * (item.amount / 100),
-          sodium: (item.sodium || 0) * (item.amount / 100),
-          date: today,
-          loggedTime: timeString,
-          foods: [item],
-          isLogged: true
-        }
-        
-        // Use the addMeal service to log this meal
-        addMeal(mealData).then(() => {
-          setIsLoggingSingleItem(false)
-          // Clear the cart state
-          clearCart()
-          Alert.alert("Success", `${item.name} logged successfully`, [
-            { text: "OK", onPress: () => navigation.goBack() }
-          ])
-        }).catch(error => {
-          console.error("Error logging single item:", error)
-          setIsLoggingSingleItem(false)
-          Alert.alert("Error", "Failed to log meal. Please try again.")
-        })
-      } catch (error) {
-        console.error("Error logging single item:", error)
-        setIsLoggingSingleItem(false)
-        Alert.alert("Error", "Failed to log meal. Please try again.")
-      }
-    } else {
-      // Navigate to review screen for multiple items
-      navigation.navigate("CustomMealReview", {
-        selectedFoods: selectedItems,
-        onMealLogged: clearCart // Pass the callback to clear cart state
-      })
-    }
+    const defaultMealName = selectedItems.length === 1 ? selectedItems[0].name : ""
+
+    // Navigate to CustomMealReviewScreen and pass the selected items
+    // **Crucially, pass the local clearCart function as a callback**
+    navigation.navigate("CustomMealReview", {
+      selectedFoods: selectedItems, 
+      defaultMealName: defaultMealName,
+      // Ensure the callback passed is the one that clears this screen's state
+      onMealLogged: clearCart, 
+      clearCart: clearCart // Pass it under both names just in case
+    })
   }
 
   const handleCartPress = () => {
@@ -938,6 +945,9 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
     })
   }
 
+  // Add this state at the top with other states
+  const [searchBarSticky, setSearchBarSticky] = useState(false);
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <GestureHandlerRootView style={{ flex: 1 }}>
@@ -952,20 +962,44 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
             </View>
           )}
           
-        {/* Header matching other screens exactly */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}> 
-            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Log Items</Text>
-          <TouchableOpacity onPress={handleCartPress} style={styles.cartButton}>
-            <Ionicons name="cart-outline" size={24} color="#FFFFFF" />
-            {cartCount > 0 && (
-              <View style={styles.cartBadge}>
-                <Text style={styles.cartBadgeText}>{cartCount}</Text>
+        {/* Header with search bar */}
+        <View style={styles.headerContainer}>
+          {/* Header matching other screens exactly */}
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}> 
+              <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Log Items</Text>
+            <TouchableOpacity onPress={handleCartPress} style={styles.cartButton}>
+              <Ionicons name="cart-outline" size={24} color="#FFFFFF" />
+              {cartCount > 0 && (
+                <View style={styles.cartBadge}>
+                  <Text style={styles.cartBadgeText}>{cartCount}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+          
+          {/* Only render search container if not showing a sticky search */}
+          {!searchBarSticky && (
+            <View style={styles.searchContainer}>
+              <View style={styles.searchInputContainer}>
+                <Ionicons name="search" size={18} color="#666666" style={styles.searchIcon} />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search..."
+                  placeholderTextColor="#666666"
+                  value={searchText}
+                  onChangeText={setSearchText}
+                />
+                {searchText.length > 0 && (
+                  <TouchableOpacity onPress={() => setSearchText("")} style={styles.clearButton}>
+                    <Ionicons name="close-circle" size={18} color="#666666" />
+                  </TouchableOpacity>
+                )}
               </View>
-            )}
-          </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         {/* Main Content Area */}
@@ -975,6 +1009,29 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
           showsVerticalScrollIndicator={false} 
           keyboardShouldPersistTaps="handled"
         >
+          {/* Sticky search bar - remove condition to make it consistent for all tabs */}
+          {searchBarSticky && (
+            <View style={styles.stickySearchContainer}>
+              <View style={styles.searchInputContainer}>
+                <Ionicons name="search" size={18} color="#666666" style={styles.searchIcon} />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search..."
+                  placeholderTextColor="#666666"
+                  value={searchText}
+                  onChangeText={setSearchText}
+                  returnKeyType="search"
+                  clearButtonMode="while-editing"
+                />
+                {searchText.length > 0 && (
+                  <TouchableOpacity onPress={() => setSearchText("")} style={styles.clearButton}>
+                    <Ionicons name="close-circle" size={18} color="#666666" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          )}
+          
           {/* Updated Tabs with Animated Indicator */}
           <View style={styles.tabContainer}>
             {/* Animated Tab Indicator */}
@@ -1000,20 +1057,6 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
               <TouchableOpacity style={styles.tabButton} onPress={() => handleTabPress("Meals")}>
                 <Text style={[styles.tabText, activeTab === "Meals" && styles.activeTabText]}>Meals</Text>
             </TouchableOpacity>
-          </View>
-
-          {/* Updated Search Bar with Icon */}
-          <View style={styles.searchContainer}>
-            <View style={styles.searchInputContainer}>
-              <Ionicons name="search" size={18} color="#666666" style={styles.searchIcon} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search..."
-                placeholderTextColor="#666666"
-                value={searchText}
-                onChangeText={setSearchText}
-              />
-            </View>
           </View>
 
           {/* Updated Add Food Button */}
@@ -1085,14 +1128,18 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#000000", // Adding background color to container
   },
+  headerContainer: {
+    backgroundColor: "#000000",
+    borderBottomWidth: 1,
+    borderBottomColor: "#2E2E2E",
+    zIndex: 10, // Make sure header is above content
+  },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 20,
     paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: "#2E2E2E",
     width: "100%",
   },
   backButton: {
@@ -1125,9 +1172,10 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1, // Takes remaining space above footer
+    // Remove top padding as it's now handled by the header
   },
   scrollViewContent: {
-    // Added for padding at bottom
+    paddingTop: 10, // Reduced top padding since search bar is now in header
     paddingBottom: 20, // Add some padding below the list
   },
   tabContainer: {
@@ -1160,8 +1208,9 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
   searchContainer: {
-    paddingHorizontal: 20,
-    marginTop: 15,
+    marginHorizontal: 20,
+    marginVertical: 10,
+    marginBottom: 15,
   },
   searchInputContainer: {
     flexDirection: "row",
@@ -1595,6 +1644,22 @@ const styles = StyleSheet.create({
     zIndex: 9999,
     justifyContent: "center",
     alignItems: "center",
+  },
+  stickySearchContainer: {
+    backgroundColor: "#1C1C1E",
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+    width: "100%",
+    zIndex: 10,
+  },
+  clearButton: {
+    padding: 5,
   },
 })
 

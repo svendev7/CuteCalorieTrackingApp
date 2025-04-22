@@ -7,7 +7,6 @@ import { Ionicons } from "@expo/vector-icons"
 
 const { width } = Dimensions.get("window")
 
-// App colors
 const COLORS = {
   background: "#1C1C1E",
   accent: "#06D6A0",
@@ -36,19 +35,16 @@ const AnimatedFooter: React.FC<AnimatedFooterProps> = ({
   const [isOpen, setIsOpen] = useState(false)
   const [previousTab, setPreviousTab] = useState(activeTab)
 
-  // Animation values
   const rotateAnim = useRef(new Animated.Value(0)).current
   const buttonScaleAnim = useRef(new Animated.Value(1)).current
   const footerVisibilityAnim = useRef(new Animated.Value(isVisible ? 0 : 100)).current
   const footerOpacityAnim = useRef(new Animated.Value(isVisible ? 1 : 0)).current
   const slideDirectionAnim = useRef(new Animated.Value(0)).current
 
-  // Menu item animations
   const menuItem1Anim = useRef(new Animated.Value(0)).current
   const menuItem2Anim = useRef(new Animated.Value(0)).current
   const menuItem3Anim = useRef(new Animated.Value(0)).current
 
-  // Close menu when footer visibility changes
   useEffect(() => {
     if (!isVisible && isOpen) {
       setIsOpen(false)
@@ -60,7 +56,6 @@ const AnimatedFooter: React.FC<AnimatedFooterProps> = ({
       }).start()
     }
 
-    // Animate footer visibility
     Animated.parallel([
       Animated.timing(footerVisibilityAnim, {
         toValue: isVisible ? 0 : 100,
@@ -76,18 +71,14 @@ const AnimatedFooter: React.FC<AnimatedFooterProps> = ({
     ]).start()
   }, [isVisible])
 
-  // Track tab changes for animation direction
   useEffect(() => {
     if (activeTab !== previousTab && previousTab && activeTab) {
-      // Determine slide direction based on tab order
       const tabOrder = ["home", "meals", "stats", "games", "profile"]
       const prevIndex = tabOrder.indexOf(previousTab)
       const currentIndex = tabOrder.indexOf(activeTab)
 
-      // Set direction value for animation
       const direction = prevIndex < currentIndex ? 1 : -1
 
-      // Hide footer first
       Animated.parallel([
         Animated.timing(footerOpacityAnim, {
           toValue: 0,
@@ -100,7 +91,6 @@ const AnimatedFooter: React.FC<AnimatedFooterProps> = ({
           useNativeDriver: true,
         }),
       ]).start(() => {
-        // Reset position and show with new direction
         slideDirectionAnim.setValue(100 * direction)
 
         Animated.parallel([
@@ -122,9 +112,7 @@ const AnimatedFooter: React.FC<AnimatedFooterProps> = ({
     }
   }, [activeTab])
 
-  // Toggle menu animation
   const toggleMenu = () => {
-    // Button press animation
     Animated.sequence([
       Animated.timing(buttonScaleAnim, {
         toValue: 0.9,
@@ -139,7 +127,6 @@ const AnimatedFooter: React.FC<AnimatedFooterProps> = ({
       }),
     ]).start()
 
-    // Rotate animation
     Animated.timing(rotateAnim, {
       toValue: isOpen ? 0 : 1,
       duration: 300,
@@ -147,7 +134,6 @@ const AnimatedFooter: React.FC<AnimatedFooterProps> = ({
       useNativeDriver: true,
     }).start()
 
-    // Menu items animations
     const menuItems = [menuItem1Anim, menuItem2Anim, menuItem3Anim]
 
     menuItems.forEach((anim, index) => {
@@ -163,7 +149,6 @@ const AnimatedFooter: React.FC<AnimatedFooterProps> = ({
     setIsOpen(!isOpen)
   }
 
-  // Handle menu button press
   const handleButtonPress = (callback?: () => void) => {
     if (isOpen) {
       toggleMenu()
@@ -174,13 +159,11 @@ const AnimatedFooter: React.FC<AnimatedFooterProps> = ({
     }
   }
 
-  // Calculate rotation for plus/cross animation
   const rotation = rotateAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ["0deg", "135deg"],
   })
 
-  // Calculate shadow opacity based on menu state
   const shadowOpacity = rotateAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [0.3, 0.5],
@@ -196,10 +179,8 @@ const AnimatedFooter: React.FC<AnimatedFooterProps> = ({
         },
       ]}
     >
-      {/* Menu Items */}
       {isOpen && (
         <View style={styles.menuContainer}>
-          {/* Log Meal Button */}
           <Animated.View
             style={[
               styles.menuItemContainer,
@@ -228,7 +209,6 @@ const AnimatedFooter: React.FC<AnimatedFooterProps> = ({
             </TouchableOpacity>
           </Animated.View>
 
-          {/* Stats Button */}
           <Animated.View
             style={[
               styles.menuItemContainer,
@@ -261,7 +241,6 @@ const AnimatedFooter: React.FC<AnimatedFooterProps> = ({
             </TouchableOpacity>
           </Animated.View>
 
-          {/* Games Button */}
           <Animated.View
             style={[
               styles.menuItemContainer,
@@ -296,7 +275,6 @@ const AnimatedFooter: React.FC<AnimatedFooterProps> = ({
         </View>
       )}
 
-      {/* Toggle Button */}
       <Animated.View
         style={[
           styles.toggleButtonContainer,
