@@ -35,6 +35,7 @@ import {
   forceResetAllCartItems,
 } from "../../services/mealService"
 import { Swipeable, GestureHandlerRootView } from "react-native-gesture-handler"
+import { useCart } from "../../context/CartContext"
 
 const { width, height } = Dimensions.get("window")
 
@@ -77,9 +78,6 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
   const [activeTab, setActiveTab] = useState("Foods")
   const [searchText, setSearchText] = useState("")
   const [activeFilter, setActiveFilter] = useState("Recent")
-  const [cartCount, setCartCount] = useState(0) // Example cart count
-  const [currentMealItems, setCurrentMealItems] = useState<(FoodItem | MealItem)[]>([]) // State to hold added items
-  const [selectedItems, setSelectedItems] = useState<any[]>([])
   const [modalVisible, setModalVisible] = useState(false)
   const [selectedFood, setSelectedFood] = useState<FoodItem | MealItem | null>(null)
   const [quantity, setQuantity] = useState("100")
@@ -98,6 +96,9 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
   // Add state for tracking favorite items
   const [favoriteItems, setFavoriteItems] = useState<{ [key: string]: boolean }>({})
   const swipeableRefs = useRef<{ [key: string]: Swipeable | null }>({})
+
+  // Get cart context
+  const { cartItems, itemCount, addToCart, clearCart: contextClearCart, updateQuantity, removeFromCart } = useCart();
 
   // Add haptic feedback function
   const triggerHapticFeedback = () => {
@@ -141,29 +142,22 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
   // Fetch meals based on active filter
   useEffect(() => {
     fetchMeals()
-  }, [activeFilter])
+  }, [activeFilter, activeTab])
 
   // Add a navigation focus listener to refresh data when returning to this screen
   useEffect(() => {
-    // Create a focus listener that forces a refresh and clears the cart completely
     const unsubscribe = navigation.addListener?.('focus', () => {
-      console.log("🚨 SCREEN FOCUSED: Aggressively clearing cart state");
+      console.log("🚨 SCREEN FOCUSED: Aggressively clearing cart state via Context");
       
-      // Clear local cart state immediately
-      setCurrentMealItems([]);
-      setSelectedItems([]);
-      setCartCount(0);
+      // Clear local cart state immediately using Context
+      contextClearCart(); // Use context clearCart
       
-      // Force clear any lingering cart items in Firestore before refreshing
       const forceClearAndRefresh = async () => {
         try {
           const currentUser = auth.currentUser;
           if (currentUser) {
-            // Use the more aggressive cart reset function
             await forceResetAllCartItems(currentUser.uid);
-            
-            // Then refresh the data
-            fetchMeals();
+            fetchMeals(); // Refresh data
           }
         } catch (error) {
           console.error("Error clearing cart on screen focus:", error);
@@ -179,7 +173,7 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
         unsubscribe.remove?.();
       }
     };
-  }, [navigation]);
+  }, [navigation, contextClearCart]); // Added contextClearCart dependency
 
   const fetchMeals = async () => {
     try {
@@ -289,7 +283,6 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
     }).start()
     
     setActiveTab(tabName)
-    // Reset filter to Recent when switching tabs
     setActiveFilter("Recent")
     // Reset filter indicator position
     Animated.spring(filterIndicatorPosition, {
@@ -299,11 +292,7 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
       useNativeDriver: false,
     }).start()
     
-    // Remove special handling for Foods tab
     setSearchBarSticky(false)
-    
-    // Fetch data when tab changes
-    fetchMeals()
   }
 
   const handleFilterPress = (filterName: string) => {
@@ -320,36 +309,31 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
     
     setActiveFilter(filterName)
     
-    // Remove special handling for Recent tab
     setSearchBarSticky(false)
   }
 
   const handleAddItemToMeal = (item: FoodItem | MealItem, selectedQuantity = "100", selectedUnit = "g") => {
-    // Ensure item has all required fields for Food interface in CustomMealReviewScreen
-    const enhancedItem = {
+    // Determine item type based on active tab
+    const itemType = activeTab === "Foods" ? "food" : "meal";
+    
+    // Prepare the item with quantity and unit for the cart context
+    const itemToAdd = {
       ...item,
-      // Add default values for any missing properties needed in CustomMealReviewScreen
-      amount: Number.parseFloat(selectedQuantity) || 100,
-      unit: selectedUnit || "g",
-      // Ensure these fields exist for the Food interface in CustomMealReviewScreen
+      amount: Number.parseFloat(selectedQuantity) || (itemType === 'food' ? 100 : 1), // Default amount
+      unit: selectedUnit || (itemType === 'food' ? 'g' : 'serving'), // Default unit
+      // Ensure basic fields are present for CartItem interface
+      name: item.name || 'Unnamed Item',
+      protein: item.protein || 0,
+      carbs: item.carbs || 0,
+      fat: item.fat || 0,
+      calories: item.calories || 0,
+      sodium: item.sodium || 0,
       sugar: item.sugar || 0,
       fibers: item.fibers || 0,
-      sodium: item.sodium || 0,
-    }
-    setCurrentMealItems((prev) => [...prev, enhancedItem]) // Add to internal state
-    setSelectedItems((prev) => [...prev, enhancedItem]) // Also add to selected items for continue button
-    setCartCount((prev) => prev + 1)
-    
-    // Update Firebase to mark this food as added to cart
-    try {
-      const currentUser = auth.currentUser
-      if (currentUser && activeTab === "Foods") {
-        updateFoodCartStatus(currentUser.uid, item.id, true)
-      }
-    } catch (error) {
-      console.error("Error updating food cart status:", error)
-      // Continue with UI updates even if Firebase update fails
-    }
+    };
+
+    // Add to cart using context function
+    addToCart(itemToAdd, itemType); 
   }
 
   const handleEditItem = (item: FoodItem | MealItem) => {
@@ -567,7 +551,6 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
 
   // Function to confirm deletion
   const confirmDeleteItem = (item: FoodItem | MealItem) => {
-    // Make sure we're deleting the correct item
     Alert.alert(
       "Delete Item",
       `Are you sure you want to delete ${item.name}?`,
@@ -575,6 +558,12 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
         {
           text: "Cancel",
           style: "cancel",
+          onPress: () => {
+            // Ensure swipeable closes if cancelled
+             if (swipeableRefs.current[item.id]) {
+               swipeableRefs.current[item.id]?.close();
+             }
+          }
         },
         {
           text: "Delete",
@@ -587,39 +576,25 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
                 return;
               }
               
-              // First remove from local state immediately
+              // Remove from local UI state immediately
               if (activeTab === "Foods") {
-                setFoodItems(prev => prev.filter(food => food.id !== item.id))
+                setFoodItems(prev => prev.filter(food => food.id !== item.id));
               } else {
-                setMealItems(prev => prev.filter(meal => meal.id !== item.id))
+                setMealItems(prev => prev.filter(meal => meal.id !== item.id));
               }
               
-              // If the item was in the cart, remove it from there too (immediately)
-              setCurrentMealItems(prev => prev.filter(i => i.id !== item.id))
-              setSelectedItems(prev => prev.filter(i => i.id !== item.id))
-              
-              // Update cart count
-              const removedCount = currentMealItems.filter(i => i.id === item.id).length
-              if (removedCount > 0) {
-                setCartCount(prev => Math.max(0, prev - removedCount))
-              }
-              
-              // Update Firebase to mark food as not in cart (do this first)
-              if (activeTab === "Foods") {
-                try {
-                  await updateFoodCartStatus(currentUser.uid, item.id, false);
-                } catch (cartError) {
-                  console.error("Error updating cart status:", cartError);
-                  // Continue regardless of cart status update error
-                }
-              }
+              // Find corresponding cart item(s) by originalItemId and remove from context cart
+              const cartItemsToRemove = cartItems.filter(ci => ci.originalItemId === item.id);
+              cartItemsToRemove.forEach(ci => removeFromCart(ci.id)); // Use context remove
 
               // Delete from Firestore based on current tab
               if (activeTab === "Foods") {
+                // No need to update cart status first, just delete
                 await deleteUserFood(currentUser.uid, item.id, 'food');
               } else {
                 await deleteMeal(item.id);
               }
+              
             } catch (error) {
               console.error("Error deleting item:", error)
               Alert.alert(
@@ -627,10 +602,14 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
                 "Failed to delete item. Please try again.",
                 [{ text: "OK" }]
               )
+              // Optionally re-fetch data on error to sync UI
+              fetchMeals(); 
+            } finally {
+               // Close the swipeable after action
+               if (swipeableRefs.current[item.id]) {
+                 swipeableRefs.current[item.id]?.close();
+               }
             }
-            
-            // Close all swipeables
-            Object.values(swipeableRefs.current).forEach((ref) => ref?.close())
           },
         },
       ]
@@ -880,69 +859,47 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
     navigation.navigate("AddFoodOptions")
   }
 
-  // Function to clear the cart completely (improved version)
+  // Function to clear the cart completely (simplified using context)
   const clearCart = useCallback(async () => {
-    console.log("🧹 MANUAL CART CLEAR: Aggressive cart clearing initiated");
+    console.log("🧹 MANUAL CART CLEAR: Aggressively clearing cart initiated via Context");
     
-    // First make a copy of the current meal items for Firebase updates
-    const itemsToClear = [...currentMealItems];
-    
-    // Clear local state immediately for better UX
-    setCurrentMealItems([]);
-    setSelectedItems([]);
-    setCartCount(0);
+    // Clear context state immediately
+    contextClearCart(); // Call context clearCart
     
     // Update Firebase to mark foods as not in cart
     try {
       const currentUser = auth.currentUser;
       if (currentUser) {
         console.log("Calling forceResetAllCartItems for user:", currentUser.uid);
-        
-        // Use our new aggressive cart clearing function
         await forceResetAllCartItems(currentUser.uid);
-        
-        // Force a refresh of the data to ensure UI is in sync with backend
-        setTimeout(() => {
-          fetchMeals();
-        }, 100);
+        // Optionally re-fetch data after clearing backend state
+        // fetchMeals(); // Consider if needed - focus listener might handle this
       }
     } catch (error) {
       console.error("Error clearing cart in Firebase:", error);
     }
-  }, [currentMealItems, fetchMeals]);
+  }, [contextClearCart]); // Dependency on contextClearCart
 
   const handleContinuePress = () => {
-    if (selectedItems.length === 0) {
+    // Use itemCount from context
+    if (itemCount === 0) { 
       Alert.alert("Empty Meal", "Please add at least one item to your meal.")
       return
     }
 
-    const defaultMealName = selectedItems.length === 1 ? selectedItems[0].name : ""
-
-    // Navigate to CustomMealReviewScreen and pass the selected items
-    // **Crucially, pass the local clearCart function as a callback**
-    navigation.navigate("CustomMealReview", {
-      selectedFoods: selectedItems, 
-      defaultMealName: defaultMealName,
-      // Ensure the callback passed is the one that clears this screen's state
-      onMealLogged: clearCart, 
-      clearCart: clearCart // Pass it under both names just in case
-    })
+    // Navigate to CustomMealReviewScreen without passing any items or callbacks
+    // The review screen will now pull items directly from CartContext
+    navigation.navigate("CustomMealReview") 
   }
 
   const handleCartPress = () => {
-    // Pass the currently added items to the review screen
-    if (currentMealItems.length === 0) {
+    // Use itemCount from context
+    if (itemCount === 0) { 
       return // Don't navigate if cart is empty
     }
     
-    const defaultMealName = currentMealItems.length === 1 ? currentMealItems[0].name : ""
-    
-    navigation.navigate("CustomMealReview", { 
-      selectedFoods: currentMealItems,
-      defaultMealName: defaultMealName,
-      onMealLogged: clearCart // Pass the callback to clear cart state
-    })
+    // Navigate without passing props, review screen uses context
+    navigation.navigate("CustomMealReview") 
   }
 
   // Add this state at the top with other states
@@ -972,9 +929,11 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
             <Text style={styles.headerTitle}>Log Items</Text>
             <TouchableOpacity onPress={handleCartPress} style={styles.cartButton}>
               <Ionicons name="cart-outline" size={24} color="#FFFFFF" />
-              {cartCount > 0 && (
+              {/* Use itemCount from context */}
+              {itemCount > 0 && ( 
                 <View style={styles.cartBadge}>
-                  <Text style={styles.cartBadgeText}>{cartCount}</Text>
+                  {/* Use itemCount from context */}
+                  <Text style={styles.cartBadgeText}>{itemCount}</Text> 
                 </View>
               )}
             </TouchableOpacity>
@@ -1101,11 +1060,13 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
         <View style={styles.footer}>
           <TouchableOpacity 
             onPress={handleContinuePress} 
-            style={[styles.continueButton, selectedItems.length === 0 && styles.disabledButton]}
-            disabled={selectedItems.length === 0}
+            // Use itemCount from context for disabled state
+            style={[styles.continueButton, itemCount === 0 && styles.disabledButton]} 
+            disabled={itemCount === 0} // Use itemCount from context
           >
-              <Text style={[styles.buttonText, selectedItems.length === 0 && styles.disabledButtonText]}>
-                {selectedItems.length === 1 ? "Log" : "Continue"}
+              {/* Use itemCount from context for button text */}
+              <Text style={[styles.buttonText, itemCount === 0 && styles.disabledButtonText]}> 
+                {itemCount > 0 ? "Continue" : "Add Items"} {/* Updated text */}
               </Text>
           </TouchableOpacity>
         </View>

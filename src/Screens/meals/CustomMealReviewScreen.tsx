@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useMemo } from "react"
 import {
   View,
   Text,
@@ -25,28 +25,15 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons"
 import { auth, db } from "../../config/firebase"
-import { addMeal, clearAllCartItems, forceResetAllCartItems } from "../../services/mealService"
+import { addMeal, clearAllCartItems, forceResetAllCartItems, Meal, FoodItem as MealServiceFoodItem } from "../../services/mealService"
 import { generateMealName } from "../../services/aiService"
 import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore"
 import Toast from 'react-native-toast-message'
 import * as ImagePicker from 'expo-image-picker'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useCart, CartItem } from "../../context/CartContext"
 
 const { width, height } = Dimensions.get("window")
-
-interface Food {
-  id: string
-  name: string
-  protein: number
-  carbs: number
-  fat: number
-  calories: number
-  sugar: number
-  fibers: number
-  sodium: number
-  amount: number
-  unit: string
-}
 
 interface CustomMealReviewScreenProps {
   navigation: any
@@ -78,14 +65,14 @@ const SuccessPopup = ({ visible, message, onDismiss }) => {
 };
 
 export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ navigation, route }) => {
-  const initialFoods = route.params?.selectedFoods || route.params?.items || [];
-  const defaultMealName = route.params?.defaultMealName || '';
-  const [foods, setFoods] = useState<Food[]>(initialFoods);
+  // Use Cart Context
+  const { cartItems, itemCount, updateQuantity, removeFromCart, clearCart: contextClearCart, totalMacros: contextTotalMacros } = useCart();
+  
   const [modalVisible, setModalVisible] = useState(false);
-  const [selectedFoodIndex, setSelectedFoodIndex] = useState<number | null>(null);
+  const [selectedCartItemIndex, setSelectedCartItemIndex] = useState<number | null>(null);
   const [quantity, setQuantity] = useState('100');
   const [unit, setUnit] = useState('g');
-  const [mealName, setMealName] = useState(defaultMealName);
+  const [mealName, setMealName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [mealImage, setMealImage] = useState<string | null>(null);
   const modalOffset = useRef(new Animated.Value(0)).current;
@@ -100,43 +87,50 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
   
   const insets = useSafeAreaInsets();
   
-  // Check user preference for AI suggestions on component mount
+  // Effect to suggest name based on cartItems (if not disabled)
   useEffect(() => {
-    const checkAiPreference = async () => {
+    const checkAiPreferenceAndSuggestName = async () => {
+      let userPreference = false;
       try {
         if (auth.currentUser) {
           const userDoc = await getDoc(doc(db, "users", auth.currentUser.uid));
           if (userDoc.exists()) {
-            const userPreference = userDoc.data().disableAiSuggestions || false;
+            userPreference = userDoc.data().disableAiSuggestions || false;
             setDisableAiSuggestions(userPreference);
-            
-            // Only automatically suggest a name if AI suggestions are not disabled
-            if (foods.length > 1 && !mealName && !userPreference) {
-              const suggestion = generateMealName(foods);
-              setAiMealNameSuggestion(suggestion);
-              setShowAiSuggestionModal(true);
-            }
           }
         }
-      } catch (error) {
-        console.error('Error reading AI preference from Firestore:', error);
+      } catch (error) { 
+        console.error('Error reading AI preference:', error);
+      }
+      
+      // Suggest name only if AI not disabled, cart has >1 item, and name isn't set
+      if (!userPreference && cartItems.length > 1 && !mealName) {
+          // Convert CartItem[] to FoodItem[] for generateMealName if needed
+          const itemsForSuggestion = cartItems.map(ci => ({ ...ci })); // Simple map for now
+          const suggestion = generateMealName(itemsForSuggestion);
+          setAiMealNameSuggestion(suggestion);
+          setShowAiSuggestionModal(true);
       }
     };
+
+    checkAiPreferenceAndSuggestName();
     
-    checkAiPreference();
-  }, [foods, mealName]);
-  
+    // Set default meal name if cart has only one item and name is empty
+    if (cartItems.length === 1 && !mealName) {
+      setMealName(cartItems[0].name);
+    }
+    
+  }, [cartItems, mealName]);
+
   // Generate an AI meal name
   const handleGenerateAiName = () => {
-    if (foods.length === 0) return;
-    
-    const suggestion = generateMealName(foods);
+    if (cartItems.length === 0) return;
+    const itemsForSuggestion = cartItems.map(ci => ({ ...ci })); // Simple map for now
+    const suggestion = generateMealName(itemsForSuggestion);
     setAiMealNameSuggestion(suggestion);
-    
-    // Always show the modal when button is clicked
     setShowAiSuggestionModal(true);
   };
-  
+
   // Accept the AI suggested name
   const acceptAiSuggestion = () => {
     setMealName(aiMealNameSuggestion);
@@ -215,32 +209,36 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
   }, []);
 
   const handleEditFood = (index: number) => {
-    // Set the selected food index and current quantity/unit
-    setSelectedFoodIndex(index);
-    const foodToEdit = foods[index];
-    setQuantity(foodToEdit.amount?.toString() || '100');
-    setUnit(foodToEdit.unit || 'g');
+    // Get the specific CartItem using the index
+    const cartItemToEdit = cartItems[index];
+    if (!cartItemToEdit) return;
+
+    setSelectedCartItemIndex(index); // Store the index
+    setQuantity(cartItemToEdit.amount?.toString() || '100');
+    setUnit(cartItemToEdit.unit || 'g');
     setModalVisible(true);
   };
 
   const handleUpdateQuantity = () => {
-    if (selectedFoodIndex !== null) {
-      const updatedFoods = [...foods];
-      updatedFoods[selectedFoodIndex] = {
-        ...updatedFoods[selectedFoodIndex],
-        amount: parseFloat(quantity) || 100,
-        unit: unit,
-      };
-      setFoods(updatedFoods);
+    if (selectedCartItemIndex !== null) {
+      const cartItemToUpdate = cartItems[selectedCartItemIndex];
+      if (cartItemToUpdate) {
+        // Call context updateQuantity with the unique cart item ID
+        updateQuantity(cartItemToUpdate.id, parseFloat(quantity) || 100);
+        // Unit update needs to be handled if needed, context might need adjustment or do it locally?
+        // For now, assuming context only updates amount.
+      }
       setModalVisible(false);
-      setSelectedFoodIndex(null);
+      setSelectedCartItemIndex(null);
     }
   };
 
   const handleDeleteFood = (index: number) => {
-    const updatedFoods = [...foods];
-    updatedFoods.splice(index, 1);
-    setFoods(updatedFoods);
+    const cartItemToDelete = cartItems[index];
+    if (cartItemToDelete) {
+       // Call context removeFromCart with the unique cart item ID
+      removeFromCart(cartItemToDelete.id);
+    }
   };
 
   const showSuccess = (message: string) => {
@@ -249,341 +247,111 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
     // Will auto-dismiss via the SuccessPopup useEffect
   };
 
-  // Add a direct effect to clear cart on component unmount
-  useEffect(() => {
-    return () => {
-      // This will run when the component is unmounted/destroyed
-      if (auth.currentUser) {
-        console.log("🧨 CustomMealReviewScreen UNMOUNTING: Final cart clear attempt");
-        forceResetAllCartItems(auth.currentUser.uid)
-          .catch(err => console.error("Error in unmount cart clear:", err));
-      }
-    };
-  }, []);
-
-  const handleLogMeal = async () => {
+  const handleLogMeal = async (isSavingMeal: boolean) => {
     if (!auth.currentUser) {
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'You must be logged in to log a meal',
-      })
-      return
+      Toast.show({ type: 'error', text1: 'Error', text2: 'You must be logged in' });
+      return;
     }
 
-    if (foods.length === 0) {
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Please add at least one food to log',
-      })
-      return
+    if (itemCount === 0) { 
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Please add items to log' });
+      return;
+    }
+    
+    if (isSavingMeal && mealName.trim() === '') { 
+        Toast.show({ type: 'error', text1: 'Error', text2: 'Please enter a meal name to save' });
+        return;
     }
 
     try {
-      console.log("💾 LOG MEAL: Starting aggressive cart clearing process");
-      setIsSaving(true)
-      const totalMacros = calculateTotalMacros()
+      console.log(`💾 ${isSavingMeal ? 'SAVE & LOG' : 'LOG'} MEAL: Starting process`);
+      setIsSaving(true);
       
-      // Make a copy of the foods array before clearing it
-      const foodsCopy = [...foods];
-      
-      // Clear local cart state immediately to prevent it from reappearing
-      setFoods([]);
-      
-      // Directly clear cart in Firestore for current user - BEFORE adding the meal
+      const totalMacros = contextTotalMacros; 
+      const currentCartItems = [...cartItems];
+
       try {
-        if (auth.currentUser) {
-          console.log("Forcing reset of ALL cart items before adding meal");
-          await forceResetAllCartItems(auth.currentUser.uid);
-        }
+        console.log("Forcing reset of ALL cart items before adding meal");
+        await forceResetAllCartItems(auth.currentUser.uid);
       } catch (clearError) {
-        console.error("Error clearing cart in Firestore:", clearError);
+        console.error("Error clearing cart in Firestore (pre-log):", clearError);
       }
-      
-      // Log the meal to Firestore
+
+      // Format the date in YYYY-MM-DD format for consistency
+      const currentDate = new Date().toISOString().split('T')[0];
+
       await addMeal({
         userId: auth.currentUser.uid,
-        mealName: mealName || foodsCopy[0].name,
+        mealName: mealName.trim() || (currentCartItems.length > 0 ? currentCartItems[0].name : 'Logged Meal'),
         protein: totalMacros.protein,
         carbs: totalMacros.carbs,
         fat: totalMacros.fat,
         calories: totalMacros.calories,
-        sugar: totalMacros.sugar,
-        fibers: totalMacros.fibers,
-        sodium: totalMacros.sodium,
-        date: new Date().toISOString().split('T')[0],
-        foods: foodsCopy.map(food => ({
-          id: food.id,
-          name: food.name,
-          protein: food.protein,
-          carbs: food.carbs,
-          fat: food.fat,
-          calories: food.calories,
-          sodium: food.sodium || 0,
-          sugar: food.sugar || 0,
-          fibers: food.fibers || 0,
-          amount: food.amount || 100,
-          unit: food.unit || 'g'
+        sugar: currentCartItems.reduce((sum, item) => sum + (item.sugar || 0) * (item.amount / 100), 0),
+        fibers: currentCartItems.reduce((sum, item) => sum + (item.fibers || 0) * (item.amount / 100), 0),
+        sodium: currentCartItems.reduce((sum, item) => sum + (item.sodium || 0) * (item.amount / 100), 0),
+        date: currentDate,
+        loggedTime: new Date().toISOString(),
+        foods: currentCartItems.map(item => ({
+          id: item.originalItemId || item.id,
+          name: item.name,
+          protein: item.protein,
+          carbs: item.carbs,
+          fat: item.fat,
+          calories: item.calories,
+          sodium: item.sodium || 0,
+          sugar: item.sugar || 0,
+          fibers: item.fibers || 0,
+          amount: item.amount || 100,
+          unit: item.unit || 'g'
         })),
         imageUrl: mealImage,
-        isCustom: false,
-        isLogged: true
-      })
+        isCustom: isSavingMeal,
+        isLogged: true // Ensure this is set to true for the meal viewer
+      });
+
+      contextClearCart();
       
-      // Clear cart AGAIN after adding meal
       try {
-        if (auth.currentUser) {
           console.log("Forcing reset of ALL cart items AFTER adding meal");
           await forceResetAllCartItems(auth.currentUser.uid);
-        }
       } catch (clearError) {
-        console.error("Error clearing cart in Firestore:", clearError);
+          console.error("Error clearing cart in Firestore (post-log):", clearError);
       }
+
+      showSuccess(isSavingMeal ? 'Meal Logged and Saved' : 'Meal Logged Successfully');
       
-      // Collect all cart clearing callbacks
-      const clearCartCallbacks = [
-        route.params?.onMealLogged, 
-        route.params?.clearCart,
-        navigation.getParam ? navigation.getParam('onMealLogged') : null
-      ];
-      
-      // Call all possible cart clearing functions immediately
-      for (const callback of clearCartCallbacks) {
-        if (typeof callback === 'function') {
-          try {
-            await callback();
-            console.log('Successfully called cart clearing callback');
-          } catch (err) {
-            console.log('Error calling cart clear callback:', err);
-          }
-        }
-      }
-      
-      // Show success popup
-      showSuccess('Meal Logged Successfully');
-      
-      // Navigate back quickly to prevent any delays that might cause cart issues
       setTimeout(() => {
         if (navigation && typeof navigation.goBack === 'function') {
           navigation.goBack();
         }
       }, 300);
+
     } catch (error) {
-      console.error('Error logging meal:', error);
-      // Show error popup
-      showSuccess('Failed to log meal');
+      console.error(`Error ${isSavingMeal ? 'saving' : 'logging'} meal:`, error);
+      showSuccess(`Failed to ${isSavingMeal ? 'save' : 'log'} meal`);
     } finally {
       setIsSaving(false);
     }
   }
 
-  const handleConfirmPress = async () => {
-    if (!auth.currentUser) {
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'You must be logged in to save a meal',
-      })
-      return
-    }
-
-    if (foods.length === 0) {
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Please add at least one food to create a meal',
-      })
-      return
-    }
-
-    if (mealName.trim() === '') {
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Please enter a name for your meal',
-      })
-      return
-    }
-
-    try {
-      console.log("💾 CONFIRM MEAL: Starting aggressive cart clearing process");
-      setIsSaving(true)
-      const totalMacros = calculateTotalMacros()
-      
-      // Make a copy of the foods array before clearing it
-      const foodsCopy = [...foods];
-      
-      // Clear local state immediately
-      setFoods([]);
-      
-      // Directly clear cart in Firestore BEFORE adding meal
-      try {
-        if (auth.currentUser) {
-          console.log("Forcing reset of ALL cart items before saving meal");
-          await forceResetAllCartItems(auth.currentUser.uid);
-        }
-      } catch (clearError) {
-        console.error("Error clearing cart in Firestore:", clearError);
-      }
-      
-      const newMeal = {
-        userId: auth.currentUser.uid,
-        mealName: mealName,
-        protein: totalMacros.protein,
-        carbs: totalMacros.carbs,
-        fat: totalMacros.fat,
-        calories: totalMacros.calories,
-        sugar: totalMacros.sugar,
-        fibers: totalMacros.fibers,
-        sodium: totalMacros.sodium,
-        date: new Date().toISOString().split('T')[0],
-        foods: foodsCopy.map(food => ({
-          id: food.id,
-          name: food.name,
-          protein: food.protein,
-          carbs: food.carbs,
-          fat: food.fat,
-          calories: food.calories,
-          sodium: food.sodium || 0,
-          sugar: food.sugar || 0,
-          fibers: food.fibers || 0,
-          amount: food.amount || 100,
-          unit: food.unit || 'g'
-        })),
-        imageUrl: mealImage,
-        isCustom: true
-      }
-      
-      await addMeal(newMeal)
-      
-      // Directly clear cart in Firestore AFTER adding meal
-      try {
-        if (auth.currentUser) {
-          console.log("Forcing reset of ALL cart items AFTER saving meal");
-          await forceResetAllCartItems(auth.currentUser.uid);
-        }
-      } catch (clearError) {
-        console.error("Error clearing cart in Firestore:", clearError);
-      }
-      
-      // Get the callbacks for clearing cart 
-      const onMealLogged = route.params?.onMealLogged;
-      const clearCart = route.params?.clearCart;
-      
-      // Call all possible cart clearing functions
-      const clearCartCallbacks = [onMealLogged, clearCart];
-      
-      for (const callback of clearCartCallbacks) {
-        if (typeof callback === 'function') {
-          try {
-            await callback();
-            console.log('Successfully called cart clearing callback');
-          } catch (err) {
-            console.log('Error calling cart clear callback:', err);
-          }
-        }
-      }
-      
-      // Try to get the navigation reference to force clear cart
-      try {
-        if (navigation && navigation.getParam) {
-          const paramCallback = navigation.getParam('onMealLogged');
-          if (typeof paramCallback === 'function') {
-            try {
-              await paramCallback();
-              console.log('Successfully called navigation param callback');
-            } catch (err) {
-              console.log('Error with navigation param callback:', err);
-            }
-          }
-        }
-      } catch (err) {
-        console.log('Error with navigation.getParam:', err);
-      }
-      
-      // Final cleanup for absolute certainty
-      try {
-        if (auth.currentUser) {
-          console.log("Final cart cleanup before navigation");
-          await forceResetAllCartItems(auth.currentUser.uid);
-        }
-      } catch (error) {
-        console.error("Error in final cart cleanup:", error);
-      }
-      
-      // Refresh the HomeScreen view (if possible)
-      try {
-        if (typeof navigation.getParent === 'function') {
-          const parent = navigation.getParent();
-          if (parent && typeof parent.getState === 'function') {
-            const homeScreen = parent.getState().routes?.find(
-              route => route.name === 'HomeTabs' || route.name === 'Home'
-            );
-            
-            if (homeScreen?.params?.refreshHomeScreen) {
-              homeScreen.params.refreshHomeScreen();
-            }
-          }
-        } else if (navigation.refreshHomeScreen) {
-          navigation.refreshHomeScreen();
-        }
-      } catch (navError) {
-        // Non-critical error, just log it and continue
-        console.log('Navigation refresh error (non-critical):', navError);
-      }
-      
-      // Show success popup
-      showSuccess('Meal Logged and Saved');
-      
-      // Navigate back quickly to prevent any cart issue
-      setTimeout(() => {
-        navigation.goBack();
-      }, 300);
-    } catch (error) {
-      console.error('Error saving meal:', error)
-      // Show error popup
-      showSuccess('Failed to save meal');
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  const calculateTotalMacros = () => {
-    return foods.reduce(
-      (totals, food) => {
-        const multiplier = (food.amount || 100) / 100;
-        totals.protein += (food.protein || 0) * multiplier;
-        totals.carbs += (food.carbs || 0) * multiplier;
-        totals.fat += (food.fat || 0) * multiplier;
-        totals.calories += (food.calories || 0) * multiplier;
-        totals.sugar += (food.sugar || 0) * multiplier;
-        totals.fibers += (food.fibers || 0) * multiplier;
-        totals.sodium += (food.sodium || 0) * multiplier;
-        return totals;
-      },
-      { protein: 0, carbs: 0, fat: 0, calories: 0, sugar: 0, fibers: 0, sodium: 0 }
-    );
-  };
-
-  const totalMacros = calculateTotalMacros()
+  const totalMacros = contextTotalMacros;
 
   const renderQuantityModal = () => {
-    if (selectedFoodIndex === null) return null;
-    const selectedFood = foods[selectedFoodIndex];
+    if (selectedCartItemIndex === null || !cartItems[selectedCartItemIndex]) return null;
+    const selectedCartItem = cartItems[selectedCartItemIndex];
     
-    // Calculate macro values based on current quantity input
-    const baseAmount = 100; // Base amount (typically 100g)
+    const baseAmount = 100;
     const ratio = parseFloat(quantity) / baseAmount || 0;
     
     const calculatedMacros = {
-      protein: Math.round(selectedFood.protein * ratio),
-      carbs: Math.round(selectedFood.carbs * ratio),
-      fat: Math.round(selectedFood.fat * ratio),
-      calories: Math.round(selectedFood.calories * ratio),
-      sodium: Math.round((selectedFood.sodium || 0) * ratio),
-      sugar: Math.round((selectedFood.sugar || 0) * ratio),
-      fiber: Math.round((selectedFood.fibers || 0) * ratio)
+      protein: Math.round(selectedCartItem.protein * ratio),
+      carbs: Math.round(selectedCartItem.carbs * ratio),
+      fat: Math.round(selectedCartItem.fat * ratio),
+      calories: Math.round(selectedCartItem.calories * ratio),
+      sodium: Math.round((selectedCartItem.sodium || 0) * ratio),
+      sugar: Math.round((selectedCartItem.sugar || 0) * ratio),
+      fibers: Math.round((selectedCartItem.fibers || 0) * ratio)
     };
     
     return (
@@ -608,9 +376,8 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
                 </TouchableOpacity>
               </View>
               
-              <Text style={styles.foodTitleInModal}>{selectedFood.name}</Text>
+              <Text style={styles.foodTitleInModal}>{selectedCartItem.name}</Text>
               
-              {/* Dynamic Macro Display */}
               <View style={styles.dynamicMacrosContainer}>
                 <View style={styles.calorieRow}>
                   <Text style={styles.dynamicCalorieValue}>{calculatedMacros.calories}</Text>
@@ -646,7 +413,7 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
                   </View>
                   
                   <View style={styles.dynamicMacroItem}>
-                    <Text style={[styles.dynamicMacroValue, styles.fibersValue]}>{calculatedMacros.fiber}g</Text>
+                    <Text style={[styles.dynamicMacroValue, styles.fibersValue]}>{calculatedMacros.fibers}g</Text>
                     <Text style={styles.dynamicMacroLabel}>Fiber</Text>
                   </View>
                 </View>
@@ -734,32 +501,26 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
     }
   }
 
-  // Helper function to calculate adjusted macros based on amount
-  const calculateAdjustedMacros = (food) => {
-    const baseAmount = 100; // Base amount (typically 100g)
-    const ratio = (food.amount || 100) / baseAmount;
+  const foodItem = (item: CartItem, index: number) => {
+    const baseAmount = 100;
+    const ratio = (item.amount || 100) / baseAmount;
     
-    return {
-      protein: Math.round(food.protein * ratio),
-      carbs: Math.round(food.carbs * ratio),
-      fat: Math.round(food.fat * ratio),
-      calories: Math.round(food.calories * ratio),
-      sodium: Math.round((food.sodium || 0) * ratio),
-      sugar: Math.round((food.sugar || 0) * ratio),
-      fibers: Math.round((food.fibers || 0) * ratio)
+    const adjustedMacros = {
+      protein: Math.round(item.protein * ratio),
+      carbs: Math.round(item.carbs * ratio),
+      fat: Math.round(item.fat * ratio),
+      calories: Math.round(item.calories * ratio),
+      sodium: Math.round((item.sodium || 0) * ratio),
+      sugar: Math.round((item.sugar || 0) * ratio),
+      fibers: Math.round((item.fibers || 0) * ratio)
     };
-  }
-
-  const foodItem = (food, index) => {
-    // Calculate adjusted macros based on the food's amount
-    const adjustedMacros = calculateAdjustedMacros(food);
     
     return (
-      <View key={`food-${food.id}-${index}`} style={styles.foodItem}>
+      <View key={item.id} style={styles.foodItem}>
         <View style={styles.foodItemContent}>
-          <Text style={styles.foodName}>{food.name}</Text>
+          <Text style={styles.foodName}>{item.name}</Text>
           <Text style={styles.foodAmount}>
-            {food.amount || 1} {food.unit || 'g'}
+            {item.amount || 1} {item.unit || 'g'}
           </Text>
           <View style={styles.macroWrapper}>
             <View style={styles.macrosGrid}>
@@ -909,7 +670,7 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
               <Text style={styles.sectionTitle}>Items in Meal</Text>
             </View>
 
-            {foods.length === 0 ? (
+            {itemCount === 0 ? (
               <View style={styles.emptyFoodList}>
                 <Text style={styles.emptyFoodText}>
                   Your meal is empty. Go back to add items.
@@ -917,12 +678,12 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
               </View>
             ) : (
               <View>
-                {foods.map((food, index) => foodItem(food, index))}
+                {cartItems.map((item, index) => foodItem(item, index))}
               </View>
             )}
           </View>
 
-          {foods.length > 0 && (
+          {itemCount > 0 && (
             <View style={styles.formSection}>
               <Text style={styles.sectionTitle}>Meal Summary</Text>
               <View style={styles.summaryContainer}>
@@ -1018,25 +779,25 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
 
         <View style={styles.footer}>
           <TouchableOpacity 
-            onPress={handleLogMeal} 
-            style={[styles.logButton, foods.length === 0 && styles.disabledButton, isSaving && styles.disabledButton]}
-            disabled={foods.length === 0 || isSaving}
+            onPress={() => handleLogMeal(false)}
+            style={[styles.logButton, itemCount === 0 && styles.disabledButton, isSaving && styles.disabledButton]}
+            disabled={itemCount === 0 || isSaving}
           >
             {isSaving ? (
               <ActivityIndicator size="small" color="#FFFFFF" />
             ) : (
-              <Text style={[styles.buttonText, foods.length === 0 && styles.disabledButtonText]}>Log</Text>
+              <Text style={[styles.buttonText, itemCount === 0 && styles.disabledButtonText]}>Log</Text>
             )}
           </TouchableOpacity>
           <TouchableOpacity 
-            onPress={handleConfirmPress} 
-            style={[styles.logAndSaveButton, foods.length === 0 && styles.disabledButton, isSaving && styles.disabledButton]}
-            disabled={foods.length === 0 || isSaving}
+            onPress={() => handleLogMeal(true)}
+            style={[styles.logAndSaveButton, itemCount === 0 && styles.disabledButton, isSaving && styles.disabledButton, !mealName.trim() && styles.disabledButton]}
+            disabled={itemCount === 0 || isSaving || !mealName.trim()}
           >
             {isSaving ? (
               <ActivityIndicator size="small" color="#FFFFFF" />
             ) : (
-              <Text style={[styles.buttonText, foods.length === 0 && styles.disabledButtonText]}>Log & Save</Text>
+              <Text style={[styles.buttonText, (itemCount === 0 || !mealName.trim()) && styles.disabledButtonText]}>Log & Save</Text>
             )}
           </TouchableOpacity>
         </View>
