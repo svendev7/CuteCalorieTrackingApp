@@ -33,9 +33,12 @@ import {
   deleteMeal,
   clearAllCartItems,
   forceResetAllCartItems,
+  saveCustomFood
 } from "../../services/mealService"
 import { Swipeable, GestureHandlerRootView } from "react-native-gesture-handler"
 import { useCart } from "../../context/CartContext"
+import FoodEditScreen from "./FoodEditScreen"
+import Toast from 'react-native-toast-message'
 
 const { width, height } = Dimensions.get("window")
 
@@ -99,6 +102,10 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
 
   // Get cart context
   const { cartItems, itemCount, addToCart, clearCart: contextClearCart, updateQuantity, removeFromCart } = useCart();
+
+  // Add state for food edit screen
+  const [showFoodEdit, setShowFoodEdit] = useState(false)
+  const [selectedFoodToEdit, setSelectedFoodToEdit] = useState<FoodItem | null>(null)
 
   // Add haptic feedback function
   const triggerHapticFeedback = () => {
@@ -174,6 +181,29 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
       }
     };
   }, [navigation, contextClearCart]); // Added contextClearCart dependency
+
+  // Add a mechanism to refresh foods when returning from add/edit screens
+  useEffect(() => {
+    // Setup a refresh mechanism when returning from add/edit flows
+    const refreshTimerId = setTimeout(() => {
+      fetchMeals();
+    }, 300); // Small delay to ensure Firebase operation completes
+    
+    return () => clearTimeout(refreshTimerId);
+  }, []);
+
+  // Add a listener to refresh data when screens change
+  useEffect(() => {
+    // Create a refresh interval that checks for updates
+    const refreshInterval = setInterval(() => {
+      const currentUser = auth.currentUser;
+      if (currentUser) {
+        fetchMeals();
+      }
+    }, 2000); // Check every 2 seconds while screen is active
+    
+    return () => clearInterval(refreshInterval);
+  }, []);
 
   const fetchMeals = async () => {
     try {
@@ -337,13 +367,16 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
   }
 
   const handleEditItem = (item: FoodItem | MealItem) => {
-    // Navigate to edit screen or show modal
-    // Ensure item is a FoodItem before trying to edit (Meals might not be editable this way)
-    if ("protein" in item) {
-      // Simple check if it's a FoodItem
-      navigation.navigate("EditCustomFood", { item }) // Use the new navigation target
+    // We only support editing foods for now
+    if (activeTab === "Meals") {
+      Alert.alert("Edit Not Available", "Editing meals is not available in this view. Please use the Meal Viewer to edit meals.");
+      return;
     }
-  }
+    
+    // Set the selected food for editing
+    setSelectedFoodToEdit(item as FoodItem);
+    setShowFoodEdit(true);
+  };
 
   const handleFoodPress = (item: FoodItem | MealItem) => {
     setSelectedFood(item)
@@ -468,7 +501,7 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
                 />
                 
                 <View style={styles.unitSelector}>
-                  {["g", "ml", "oz", "lb"].map((unitOption) => (
+                  {["g", "ml", "oz"].map((unitOption) => (
                     <TouchableOpacity 
                       key={unitOption}
                       style={[styles.unitOption, unit === unitOption && styles.selectedUnit]}
@@ -500,8 +533,6 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
 
   // Function to handle favoriting an item
   const handleFavoriteItem = async (itemId: string) => {
-    triggerHapticFeedback()
-
     // Get current item (either food or meal)
     const item = [...foodItems, ...mealItems].find(item => item.id === itemId)
     
@@ -772,7 +803,7 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
                 </View>
               )}
             </View>
-          <View style={styles.itemDetails}>
+            <View style={styles.itemDetails}>
               <View style={styles.nameRow}>
                 <Text style={styles.itemName} numberOfLines={1} ellipsizeMode="tail">
                   {item.name}
@@ -782,7 +813,7 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
                 )}
               </View>
 
-            <View style={styles.macroWrapper}>
+              <View style={styles.macroWrapper}>
                 <View style={styles.macrosContainer}>
                   <View style={styles.macroItem}>
                     <View style={[styles.macroDot, { backgroundColor: "#EF476F" }]} />
@@ -834,28 +865,35 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
                       <Text style={styles.macroValue}>{formatMacro(item.fibers || 0)}g </Text>
                       <Text style={styles.macroLabel}>Fi</Text>
                     </Text>
+                  </View>
                 </View>
-              </View>
               
-              <View style={styles.macroSeparator} />
+                <View style={styles.macroSeparator} />
               
-              <View style={styles.footerRow}>
+                <View style={styles.footerRow}>
                   <Text style={styles.itemCaloriesValue}>{formatMacro(item.calories, true)} Calories</Text>
                   <Text style={styles.perUnitText}>per {item.servingSize || 100}g</Text>
+                </View>
               </View>
             </View>
+            <View style={styles.itemActions}>
+              {isFood && (
+                <TouchableOpacity style={styles.editButton} onPress={() => handleEditItem(item)}>
+                  <MaterialCommunityIcons name="pencil" size={18} color="#EDEDED" />
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={styles.addButton} onPress={() => handleFoodPress(item)}>
+                <MaterialCommunityIcons name="plus" size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
           </View>
-            <TouchableOpacity style={styles.addButton} onPress={() => handleFoodPress(item)}>
-            <MaterialCommunityIcons name="plus" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
         </Swipeable>
       )
     })
   }
 
   const handleAddFoodPress = () => {
-    // Navigate immediately without animation delay
+    // Navigate to the Add Food Options screen
     navigation.navigate("AddFoodOptions")
   }
 
@@ -904,6 +942,67 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
 
   // Add this state at the top with other states
   const [searchBarSticky, setSearchBarSticky] = useState(false);
+
+  // Add handleSaveFood function
+  const handleSaveFood = async (updatedFood: FoodItem) => {
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) throw new Error("User not authenticated");
+      
+      // Save to Firebase using saveCustomFood function
+      await saveCustomFood(currentUser.uid, {
+        ...updatedFood,
+        // Make sure these fields are properly set
+        id: updatedFood.id,
+        isUserCreated: true
+      });
+      
+      // Close the edit screen
+      setShowFoodEdit(false);
+      
+      // Refresh the foods list
+      fetchMeals();
+
+      // Show success message
+      Toast.show({
+        type: 'success',
+        text1: 'Food Updated',
+        text2: 'Changes have been saved',
+        position: 'bottom',
+      });
+    } catch (error) {
+      console.error("Error saving food:", error);
+      Alert.alert("Error", "Failed to save changes to food");
+    }
+  };
+
+  // Add handleDeleteFood function
+  const handleDeleteFood = async (foodId: string) => {
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) throw new Error("User not authenticated");
+      
+      // Delete from Firebase
+      await deleteUserFood(currentUser.uid, foodId, "food");
+      
+      // Close the edit screen
+      setShowFoodEdit(false);
+      
+      // Refresh the foods list
+      fetchMeals();
+      
+      // Show success message
+      Toast.show({
+        type: 'success',
+        text1: 'Food Deleted',
+        text2: 'The food has been removed',
+        position: 'bottom',
+      });
+    } catch (error) {
+      console.error("Error deleting food:", error);
+      Alert.alert("Error", "Failed to delete food");
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -1073,6 +1172,17 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
 
         {/* Quantity Modal */}
         {renderQuantityModal()}
+
+        {/* Add the FoodEditScreen component */}
+        {selectedFoodToEdit && (
+          <FoodEditScreen
+            food={selectedFoodToEdit}
+            onClose={() => setShowFoodEdit(false)}
+            onSave={handleSaveFood}
+            onDelete={handleDeleteFood}
+            visible={showFoodEdit}
+          />
+        )}
       </View>
       </GestureHandlerRootView>
     </SafeAreaView>
@@ -1621,6 +1731,21 @@ const styles = StyleSheet.create({
   },
   clearButton: {
     padding: 5,
+  },
+  itemActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+  },
+  editButton: {
+    padding: 8,
+    marginRight: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "#2C2C2E",
   },
 })
 

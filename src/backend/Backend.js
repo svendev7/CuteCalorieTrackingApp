@@ -16,7 +16,6 @@ const pool = new Pool({
   port: 5432,
 });
 
-// User registration
 app.post('/register', async (req, res) => {
   const { username, password } = req.body;
   const hashedPassword = await bcrypt.hash(password, 10);
@@ -27,7 +26,6 @@ app.post('/register', async (req, res) => {
   res.json(result.rows[0]);
 });
 
-// User login
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
   const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);

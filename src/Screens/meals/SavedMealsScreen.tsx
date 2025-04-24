@@ -36,7 +36,6 @@ export const SavedMealsScreen: React.FC<SavedMealsScreenProps> = ({ onClose, onS
     }
   }, [visible])
   
-  // When the component mounts, set visible to true to trigger fetching
   useEffect(() => {
     setVisible(true)
     return () => {

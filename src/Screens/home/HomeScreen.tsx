@@ -13,7 +13,7 @@ import { MealViewer } from "../../components/mealViewer/MealViewer"
 import { MealEditScreen } from "../meals/MealEditScreen"
 import AnimatedFooter from "../../components/footer/AnimatedFooter"
 import type { Meal } from "../../services/mealService"
-import { getMealsByDate, updateMeal } from "../../services/mealService"
+import { getMealsByDate, updateMeal, deleteMeal } from "../../services/mealService"
 import { useAuth } from "../../hooks/useAuth"
 
 // Helper function to calculate daily totals
@@ -300,36 +300,105 @@ export const HomeScreen = ({ onFooterVisibilityChange, onSettingsPress, customBa
     setShowMealEdit(false)
   }
 
+  const handleDeleteMeal = async (mealId: string) => {
+    try {
+      // Delete the meal from Firebase
+      await deleteMeal(mealId)
+      
+      // Close the edit screen
+      handleCloseMealEdit()
+      
+      // Refresh the current view to remove the deleted meal
+      refreshCurrentView()
+      
+      // Show success message
+      Alert.alert("Success", "Meal deleted successfully")
+    } catch (error) {
+      console.error("Error deleting meal:", error)
+      Alert.alert("Error", "Failed to delete meal")
+    }
+  }
+
   const handleSaveMeal = async (updatedMeal: Meal) => {
     try {
-      // Update the meal in Firebase
-      await updateMeal(updatedMeal.id, updatedMeal)
-
-      // Get the date from the meal to update the correct day
-      const mealDate = updatedMeal.date?.includes("-") ? updatedMeal.date : getTodayDate() // Default to today if not in YYYY-MM-DD format
+      // If the meal doesn't have a date at all, get it from the original meal via selectedMeal
+      if (!updatedMeal.date && selectedMeal) {
+        // Try to find a valid date from selectedMeal
+        if (selectedMeal.date) {
+          const isISODateFormat = /^\d{4}-\d{2}-\d{2}$/.test(selectedMeal.date);
+          if (isISODateFormat) {
+            updatedMeal.date = selectedMeal.date;
+          } else {
+            // Extract date from formatted string if possible
+            const dateMatch = selectedMeal.date.match(/\w+, \w+ (\d+)/);
+            if (dateMatch) {
+              const day = dateMatch[1];
+              const month = new Date().getMonth() + 1;
+              const year = new Date().getFullYear();
+              updatedMeal.date = `${year}-${month.toString().padStart(2, "0")}-${day.padStart(2, "0")}`;
+            }
+          }
+        }
+      }
+      
+      // Last resort - if still no date, use today
+      if (!updatedMeal.date) {
+        updatedMeal.date = getTodayDate();
+      }
+      
+      // Update the meal in Firebase - the updateMeal function now preserves date and loggedTime
+      await updateMeal(updatedMeal.id, updatedMeal);
 
       // Reload meals for the affected date
-      await loadMealsForDate(mealDate)
+      await loadMealsForDate(updatedMeal.date);
 
       // Close edit screen
-      handleCloseMealEdit()
+      handleCloseMealEdit();
 
       // Show success message
-      Alert.alert("Success", "Meal updated successfully")
+      Alert.alert("Success", "Meal updated successfully");
     } catch (error) {
-      console.error("Error saving meal:", error)
-      Alert.alert("Error", "Failed to update meal")
+      console.error("Error saving meal:", error);
+      Alert.alert("Error", "Failed to update meal");
     }
   }
 
   // Convert MealData to Meal type for MealEditScreen
   const convertToMealType = (mealData: MealData): Meal => {
-    // Extract the YYYY-MM-DD date from the formatted date if needed
-    const dateMatch = mealData.date.match(/\w+, \w+ (\d+)/)
-    const day = dateMatch ? dateMatch[1] : new Date().getDate().toString()
-    const month = new Date().getMonth() + 1
-    const year = new Date().getFullYear()
-    const isoDate = `${year}-${month.toString().padStart(2, "0")}-${day.padStart(2, "0")}`
+    // Preserve the original date if it exists in the data
+    let originalDate = null;
+    
+    // Get the date from the meal to determine the format
+    if (mealData.date) {
+      // Check if date is in ISO format or formatted date
+      const isISODateFormat = /^\d{4}-\d{2}-\d{2}$/.test(mealData.date);
+      
+      if (isISODateFormat) {
+        // Already in ISO format, use directly
+        originalDate = mealData.date;
+      } else {
+        // Try to extract date from formatted string
+        try {
+          // Extract the day from formatted date (e.g., "Monday, July 12")
+          const dateMatch = mealData.date.match(/\w+, \w+ (\d+)/);
+          if (dateMatch) {
+            const day = dateMatch[1];
+            const month = new Date().getMonth() + 1;
+            const year = new Date().getFullYear();
+            originalDate = `${year}-${month.toString().padStart(2, "0")}-${day.padStart(2, "0")}`;
+          } else {
+            // Fallback to today if unable to extract
+            originalDate = getTodayDate();
+          }
+        } catch (error) {
+          console.error("Error parsing date:", error);
+          originalDate = getTodayDate();
+        }
+      }
+    } else {
+      // No date in the meal data, use today
+      originalDate = getTodayDate();
+    }
 
     return {
       id: mealData.id,
@@ -343,7 +412,7 @@ export const HomeScreen = ({ onFooterVisibilityChange, onSettingsPress, customBa
       fibers: mealData.fibers,
       sodium: mealData.sodium,
       loggedTime: mealData.loggedTime,
-      date: isoDate,
+      date: originalDate,
       imageUrl: mealData.imageUrl,
       createdAt: new Date() as any,
       updatedAt: new Date() as any,
@@ -432,6 +501,7 @@ export const HomeScreen = ({ onFooterVisibilityChange, onSettingsPress, customBa
           meal={convertToMealType(selectedMeal)}
           onClose={handleCloseMealEdit}
           onSave={handleSaveMeal}
+          onDelete={handleDeleteMeal}
           visible={showMealEdit}
         />
       )}

@@ -351,5 +351,3 @@ export const styles = StyleSheet.create({
   }
 });
 
-// maak het achtergronden alles wit en de text licht grijs, achtergrond achter de achtrgronden maken we dan donkerlichteg grijs
-// met serieuze text zwart

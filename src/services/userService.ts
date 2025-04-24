@@ -24,7 +24,6 @@ export interface UserProfile {
   updatedAt?: Date;
 }
 
-// Create or update a user profile
 export const saveUserProfile = async (userProfile: UserProfile) => {
   try {
     const userRef = doc(db, 'users', userProfile.uid);
@@ -33,14 +32,11 @@ export const saveUserProfile = async (userProfile: UserProfile) => {
       updatedAt: serverTimestamp()
     };
     
-    // Check if the user document exists
     const userDoc = await getDoc(userRef);
     
     if (userDoc.exists()) {
-      // Update existing user
       await updateDoc(userRef, userData);
     } else {
-      // Create new user with createdAt timestamp
       await setDoc(userRef, {
         ...userData,
         createdAt: serverTimestamp()
@@ -54,7 +50,6 @@ export const saveUserProfile = async (userProfile: UserProfile) => {
   }
 };
 
-// Get a user profile
 export const getUserProfile = async (uid: string) => {
   try {
     const userRef = doc(db, 'users', uid);

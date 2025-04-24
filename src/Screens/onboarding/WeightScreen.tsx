@@ -1,10 +1,9 @@
-// Screens/onboarding/WeightScreen.js (Updated)
 import React, { useState, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, TouchableWithoutFeedback } from 'react-native';
 import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
 
 const WeightScreen = ({ onNext, onPrev, currentWeight, updateWeight }) => {
-  const [unit, setUnit] = useState('kg'); // 'kg' or 'lb'
+  const [unit, setUnit] = useState('kg'); 
   const inputRef = useRef(null);
 
   const handleSubmit = () => {
@@ -26,12 +25,10 @@ const WeightScreen = ({ onNext, onPrev, currentWeight, updateWeight }) => {
       updateWeight(weightInLb.toString());
       setUnit('lb');
     } else if (unit === 'lb' && currentWeight) {
-      // Convert lb to kg
       const weightInKg = Math.round(parseFloat(currentWeight) / 2.20462);
       updateWeight(weightInKg.toString());
       setUnit('kg');
     } else {
-      // Just toggle the unit without conversion
       setUnit(unit === 'kg' ? 'lb' : 'kg');
     }
   };

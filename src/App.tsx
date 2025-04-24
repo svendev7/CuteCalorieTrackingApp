@@ -16,7 +16,7 @@ import { SavedMealsScreen } from "./Screens/meals/SavedMealsScreen"
 import AddFoodOptionsScreen from "./Screens/logging/AddFoodOptionsScreen"
 import Toast from "react-native-toast-message"
 import { SafeAreaProvider } from 'react-native-safe-area-context'
-import { clearAllCartItems, forceResetAllCartItems } from "./services/mealService"
+import { forceResetAllCartItems } from "./services/mealService"
 import { CartProvider } from "./context/CartContext"
 
 const { width, height } = Dimensions.get("window")
@@ -36,25 +36,20 @@ export default function App() {
   const [currentMealLogItems, setCurrentMealLogItems] = useState([])
   const { user, loading: authLoading } = useAuth()
 
-  // Main screen animations
   const homeTranslate = useRef(new Animated.Value(0)).current
   const settingsTranslate = useRef(new Animated.Value(width)).current
   const addMealTranslate = useRef(new Animated.Value(width)).current
   const rocketTranslate = useRef(new Animated.Value(width)).current
   const statsTranslate = useRef(new Animated.Value(width)).current
 
-  // Logging flow animations
   const addFoodOptionsTranslate = useRef(new Animated.Value(width)).current
   const addCustomFoodTranslate = useRef(new Animated.Value(width)).current
   const mealReviewTranslate = useRef(new Animated.Value(width)).current
   const savedMealsTranslate = useRef(new Animated.Value(width)).current
 
-  // Animation timing and easing
   const ANIM_DURATION = 300
 
-  // Effect to ensure footer visibility is consistent with screen state
   useEffect(() => {
-    // Keep footer hidden for all screens except home
     if (
       activeScreen !== "home" ||
       showAddFoodOptionsScreen ||
@@ -139,7 +134,6 @@ export default function App() {
     Animated.parallel(animations).start()
   }, [activeScreen, homeTranslate, settingsTranslate, addMealTranslate, rocketTranslate, statsTranslate])
 
-  // Animation effects for logging screens
   useEffect(() => {
     Animated.timing(addFoodOptionsTranslate, {
       toValue: showAddFoodOptionsScreen ? 0 : width,
@@ -182,7 +176,6 @@ export default function App() {
         throw new Error("User must be logged in to complete onboarding")
       }
 
-      // Save to Firestore
       const userRef = doc(db, "users", user.uid)
       await setDoc(
         userRef,
@@ -201,19 +194,15 @@ export default function App() {
   }
 
   const navigateTo = (screen) => {
-    // Always clear cart state when navigating to prevent any lingering items
     forceClearCart();
     
     setActiveScreen(screen)
 
-    // If returning to home screen, animate the footer in
     if (screen === "home") {
-      // Short delay to let the screen transition start
       setTimeout(() => {
         setIsFooterVisible(true)
       }, 50)
     } else {
-      // Hide footer immediately for other screens
       setIsFooterVisible(false)
     }
   }
@@ -231,11 +220,8 @@ export default function App() {
     console.log("Stats button pressed - No target screen defined yet")
   }
 
-  // New handler for quick add food
   const handleQuickAddFood = () => {
     setIsFooterVisible(false)
-    // Skip the meal review screen and go directly to add custom food
-    setFoodToEdit(null)
     setShowAddCustomFoodScreen(true)
   }
 
@@ -246,7 +232,6 @@ export default function App() {
   }
 
   const handleCloseAddFoodOptions = () => {
-    // Animate out first, then set state
     Animated.timing(addFoodOptionsTranslate, {
       toValue: width,
       duration: ANIM_DURATION,
@@ -260,7 +245,7 @@ export default function App() {
     setFoodToEdit(food)
     setIsFooterVisible(false)
 
-    // First, slide out AddFoodOptions if it's visible
+
     if (showAddFoodOptionsScreen) {
       Animated.timing(addFoodOptionsTranslate, {
         toValue: width,
@@ -268,7 +253,7 @@ export default function App() {
         useNativeDriver: true,
       }).start(() => {
         setShowAddFoodOptionsScreen(false)
-        // Then, slide in AddCustomFoodScreen
+
         setShowAddCustomFoodScreen(true)
       })
     } else {
@@ -277,21 +262,29 @@ export default function App() {
   }
 
   const handleCloseAddCustomFood = () => {
-    // Animate out first, then set state
+    // Signal that we should refresh the food list in AddMealLogScreen
+    const shouldRefreshFoods = showAddCustomFoodScreen;
+    
     Animated.timing(addCustomFoodTranslate, {
       toValue: width,
       duration: ANIM_DURATION,
       useNativeDriver: true,
     }).start(() => {
-      setShowAddCustomFoodScreen(false)
-      setFoodToEdit(null)
-    })
-  }
+      setShowAddCustomFoodScreen(false);
+      setFoodToEdit(null);
+      
+      // If we're returning from adding a food, fetch the latest foods
+      if (shouldRefreshFoods && auth.currentUser) {
+        console.log("Refreshing foods after adding custom food");
+        // The AddMealLogScreen will automatically refresh on focus
+      }
+    });
+  };
 
   const handleSaveOrUpdateCustomFood = (savedFood: CustomFood) => {
-    console.log("Saved/Updated food:", savedFood)
-    handleCloseAddCustomFood()
-  }
+    console.log("Saved/Updated food:", savedFood);
+    handleCloseAddCustomFood();
+  };
 
   const handleOpenMealReview = (items, defaultMealName = "") => {
     setCurrentMealLogItems(items)
@@ -300,37 +293,30 @@ export default function App() {
   }
 
   const handleCloseMealReview = () => {
-    // Force clear the cart before animating out
     forceClearCart();
     
-    // Animate out first, then set state
     Animated.timing(mealReviewTranslate, {
       toValue: width,
       duration: ANIM_DURATION,
       useNativeDriver: true,
     }).start(() => {
       setShowCustomMealReviewScreen(false)
-      // Clear the meal items when closing the review screen
       setTimeout(() => {
         setCurrentMealLogItems([]);
-        forceClearCart(); // Call again for good measure
+        forceClearCart(); 
       }, 100);
     })
   }
 
-  // Add a function to forcibly clear the cart
   const forceClearCart = async () => {
     console.log("🔥 GLOBAL CART RESET: Aggressively clearing cart at App level");
     
-    // Clear immediately in local state
     setCurrentMealLogItems([]);
     
-    // Use setTimeout to ensure state updates properly in async context
     setTimeout(() => {
       setCurrentMealLogItems([]);
     }, 100);
     
-    // Clear cart data in Firestore for the current user - use aggressive method
     try {
       const currentUser = auth.currentUser;
       if (currentUser) {
@@ -340,20 +326,10 @@ export default function App() {
       console.error("Error clearing cart in Firestore:", error);
     }
     
-    // Attempt to call the clearCart function in the meal log screen if it exists
     if (showCustomMealReviewScreen) {
       try {
-        // If review screen is showing, try to access via ref or other methods
+
         setCurrentMealLogItems([]);
-        
-        // Try to update hidden state variables that might be causing issues
-        if (typeof window !== 'undefined') {
-          // @ts-ignore - Force clear any cart-related global state
-          if (window.__PEBBLYPAL_CART_STATE) {
-            // @ts-ignore
-            window.__PEBBLYPAL_CART_STATE = [];
-          }
-        }
       } catch (err) {
         console.log('Error clearing cart state:', err);
       }
@@ -363,7 +339,6 @@ export default function App() {
   const handleSelectSavedMeal = (meal) => {
     console.log("Selected saved meal:", meal)
 
-    // Animate out first, then set state
     Animated.timing(savedMealsTranslate, {
       toValue: width,
       duration: ANIM_DURATION,
@@ -373,7 +348,6 @@ export default function App() {
     })
   }
 
-  // Main application render
   if (isLoading || authLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -396,7 +370,6 @@ export default function App() {
       <CartProvider>
         <View style={styles.container}>
           <ImageBackground source={customBackground ? { uri: customBackground } : require("../assets/bg-dark.jpg")} style={styles.backgroundImage}>
-            {/* Home Screen */}
             <Animated.View style={[styles.screenContainer, { transform: [{ translateX: homeTranslate }] }]}>
               <HomeScreen
                 onFooterVisibilityChange={setIsFooterVisible}
@@ -405,12 +378,9 @@ export default function App() {
                 navigation={{
                   navigate: (screen) => navigateTo(screen),
                   addListener: (event, callback) => {
-                    // Simple mock of the navigation listener
                     if (event === "focus") {
-                      // Call the callback immediately to simulate a focus event
                       callback()
                     }
-                    // Return an unsubscribe function
                     return {
                       remove: () => {},
                     }
@@ -419,7 +389,6 @@ export default function App() {
               />
             </Animated.View>
 
-            {/* Settings Screen */}
             <Animated.View style={[styles.screenContainer, { transform: [{ translateX: settingsTranslate }] }]}>
               <SettingsScreen
                 navigate={() => navigateTo("home")}
@@ -428,7 +397,6 @@ export default function App() {
               />
             </Animated.View>
 
-            {/* Add Meal Screen */}
             <Animated.View style={[styles.screenContainer, { transform: [{ translateX: addMealTranslate }] }]}>
               <AddMealLogScreen
                 navigation={{
@@ -450,7 +418,6 @@ export default function App() {
               />
             </Animated.View>
 
-            {/* Rocket Screen (placeholder) */}
             <Animated.View style={[styles.screenContainer, { transform: [{ translateX: rocketTranslate }] }]}>
               <View style={styles.placeholderScreen}>
                 <Text style={styles.placeholderText}>Unity View Coming Soon</Text>
@@ -462,7 +429,6 @@ export default function App() {
               </View>
             </Animated.View>
 
-            {/* Stats Screen (placeholder) */}
             <Animated.View style={[styles.screenContainer, { transform: [{ translateX: statsTranslate }] }]}>
               <View style={styles.placeholderScreen}>
                 <Text style={styles.placeholderText}>Stats & Progress Coming Soon</Text>
@@ -474,7 +440,6 @@ export default function App() {
               </View>
             </Animated.View>
 
-            {/* Add Meal Review Screen explicitly */}
             {showCustomMealReviewScreen && (
               <Animated.View style={[styles.fullScreenModal, { transform: [{ translateX: mealReviewTranslate }] }]}>
                 <CustomMealReviewScreen
@@ -500,7 +465,6 @@ export default function App() {
               </Animated.View>
             )}
             
-            {/* Add Food Options Modal */}
             {showAddFoodOptionsScreen && (
               <Animated.View style={[styles.fullScreenModal, { transform: [{ translateX: addFoodOptionsTranslate }] }]}>
                 <AddFoodOptionsScreen
@@ -522,7 +486,6 @@ export default function App() {
               </Animated.View>
             )}
             
-            {/* Add Custom Food Screen */}
             {showAddCustomFoodScreen && (
               <Animated.View style={[styles.fullScreenModal, { transform: [{ translateX: addCustomFoodTranslate }] }]}>
                 <AddCustomFoodScreen
@@ -542,15 +505,12 @@ export default function App() {
               </Animated.View>
             )}
             
-            {/* Saved Meals Screen */}
             {showSavedMealsScreen && (
               <SavedMealsScreen onClose={() => setShowSavedMealsScreen(false)} onSelectMeal={handleSelectSavedMeal} />
             )}
 
-            {/* Toast messages component */}
             <Toast position="bottom" />
 
-            {/* Bottom Navigation (only visible on certain screens) */}
             {isFooterVisible && (
               <AnimatedFooter
                 isVisible={isFooterVisible}

@@ -13,6 +13,7 @@ import {
   Image,
   Modal,
   Animated,
+  Alert,
 } from "react-native"
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons"
 import type { Meal } from "../../services/mealService"
@@ -23,10 +24,11 @@ interface MealEditScreenProps {
   meal: Meal
   onClose: () => void
   onSave: (updatedMeal: Meal) => void
+  onDelete: (mealId: string) => void
   visible: boolean
 }
 
-export const MealEditScreen: React.FC<MealEditScreenProps> = ({ meal, onClose, onSave, visible }) => {
+export const MealEditScreen: React.FC<MealEditScreenProps> = ({ meal, onClose, onSave, onDelete, visible }) => {
   const [editedMeal, setEditedMeal] = useState<Meal>({ ...meal })
   const [inputValues, setInputValues] = useState({
     protein: meal.protein.toString(),
@@ -40,13 +42,39 @@ export const MealEditScreen: React.FC<MealEditScreenProps> = ({ meal, onClose, o
   const contentOffset = useState(new Animated.Value(0))[0]
 
   const handleSave = () => {
+    // Keep the exact original date string
+    const originalDate = meal.date;
+    
     // Make sure we're preserving all necessary fields from the original meal
     const updatedMeal: Meal = {
       ...meal, // Keep all original fields
       ...editedMeal, // Apply edits
       updatedAt: new Date() as any, // Update the timestamp
-    }
-    onSave(updatedMeal)
+      // CRITICAL: Force the original date, always
+      date: originalDate,
+    };
+    
+    onSave(updatedMeal);
+  }
+
+  const handleDeleteMeal = () => {
+    Alert.alert(
+      "Delete Meal",
+      "Are you sure you want to delete this meal?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            onDelete(meal.id)
+          }
+        }
+      ]
+    )
   }
 
   const handleInputChange = (field: keyof Meal, value: string) => {
@@ -254,7 +282,7 @@ export const MealEditScreen: React.FC<MealEditScreenProps> = ({ meal, onClose, o
           </ScrollView>
 
           <View style={styles.buttonContainer}>
-            <TouchableOpacity style={styles.deleteButton} onPress={() => console.log("Delete meal")}>
+            <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteMeal}>
               <MaterialCommunityIcons name="delete-outline" size={20} color="#FF3B30" />
               <Text style={styles.deleteButtonText}>Delete</Text>
             </TouchableOpacity>

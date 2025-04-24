@@ -1,11 +1,10 @@
-// Screens/onboarding/GoalWeightScreen.js (Updated)
 import React, { useState, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, TouchableWithoutFeedback } from 'react-native';
 import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 
 const GoalWeightScreen = ({ onNext, onPrev, goalWeight, timeframe, updateGoalWeight, updateTimeframe }) => {
-  const [unit, setUnit] = useState('kg'); // 'kg' or 'lb'
+  const [unit, setUnit] = useState('kg'); 
   const inputRef = useRef(null);
 
   const handleSubmit = () => {
@@ -22,17 +21,14 @@ const GoalWeightScreen = ({ onNext, onPrev, goalWeight, timeframe, updateGoalWei
 
   const toggleUnit = () => {
     if (unit === 'kg' && goalWeight) {
-      // Convert kg to lb
       const weightInLb = Math.round(parseFloat(goalWeight) * 2.20462);
       updateGoalWeight(weightInLb.toString());
       setUnit('lb');
     } else if (unit === 'lb' && goalWeight) {
-      // Convert lb to kg
       const weightInKg = Math.round(parseFloat(goalWeight) / 2.20462);
       updateGoalWeight(weightInKg.toString());
       setUnit('kg');
     } else {
-      // Just toggle the unit without conversion
       setUnit(unit === 'kg' ? 'lb' : 'kg');
     }
   };

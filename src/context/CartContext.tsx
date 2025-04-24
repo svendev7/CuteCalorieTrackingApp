@@ -45,6 +45,7 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
 
   const addToCart = useCallback((itemData: FoodItem | Meal, type: 'food' | 'meal') => {
+    console.log("Adding to cart:", itemData, "Type:", type);
     setCartItems((prevItems) => {
       // Generate a unique ID for this specific instance in the cart
       const uniqueCartId = `${type}-${itemData.id}-${Date.now()}`;
@@ -72,14 +73,28 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
         };
       } else { // type === 'meal'
         const meal = itemData as Meal;
+        
         // When adding a meal, create a CartItem representing the whole meal
-        // Its amount/unit might represent '1 serving'
+        // Important: For meals, we want to use the EXACT macro values from the original meal
+        // without any per-100g calculation since these are already total values
+        
+        // Determine meal name from either mealName or name property
+        const effectiveMealName = meal.mealName || (meal as any).name || 'Unnamed Meal';
+        console.log("Using meal name:", effectiveMealName);
+        console.log("Original meal macros:", {
+          protein: meal.protein,
+          carbs: meal.carbs,
+          fat: meal.fat,
+          calories: meal.calories
+        });
+        
         newItem = {
           // Map Meal fields to CartItem fields
           id: uniqueCartId,
           itemType: 'meal',
           originalItemId: meal.id,
-          name: meal.mealName || 'Unnamed Meal',
+          name: effectiveMealName,
+          // Copy exact macro values from the meal - these are already totals
           protein: meal.protein || 0,
           carbs: meal.carbs || 0,
           fat: meal.fat || 0,
@@ -89,12 +104,11 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
           fibers: meal.fibers || 0,
           amount: 1, // Representing 1 serving of the meal
           unit: 'serving',
-          // Include other relevant fields if necessary, potentially from meal.foods?
-          // For simplicity, we represent the meal as a single item with its total macros.
-          // We might need to adjust this if editing individual foods within a meal *in the cart* is needed.
         };
       }
 
+      console.log("Created cart item:", newItem);
+      
       // Simple add: just append the new item
       // More complex logic could check for duplicates based on originalItemId and update quantity/replace
       return [...prevItems, newItem];
@@ -125,7 +139,7 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
 
   // Calculate total macros based on items currently in the cart
   const totalMacros = useMemo(() => {
-    return cartItems.reduce(
+    const totals = cartItems.reduce(
       (totals, item) => {
         // Use the amount/unit stored IN THE CART ITEM for calculation
         // This assumes the base macros (protein, carbs, etc.) are for a standard unit (e.g., 100g or 1 serving)
@@ -145,6 +159,7 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
            multiplier = item.amount;
         }
 
+        // Add the calculated values to the totals
         totals.calories += (item.calories || 0) * multiplier;
         totals.protein += (item.protein || 0) * multiplier;
         totals.carbs += (item.carbs || 0) * multiplier;
@@ -157,6 +172,9 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
       },
       { calories: 0, protein: 0, carbs: 0, fat: 0, sugar: 0, fibers: 0, sodium: 0 } 
     );
+    
+    console.log("Calculated total macros:", totals);
+    return totals;
   }, [cartItems]);
   
   const itemCount = useMemo(() => cartItems.length, [cartItems]);

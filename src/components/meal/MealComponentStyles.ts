@@ -1,7 +1,6 @@
 import { StyleSheet, Dimensions } from 'react-native';
 const { width, height } = Dimensions.get('window');
 
-// Define colors to match AddMealLogScreen
 const colors = {
   text: '#FFFFFF',             
   secondary: '#A0A0A0',
@@ -53,7 +52,7 @@ export const styles = StyleSheet.create({
       fontSize: 11,
       marginBottom: 4,
     },
-    // New styles for the 3-column macro layout
+
     macrosRow: {
       flexDirection: "row",
       justifyContent: "space-between",
@@ -94,8 +93,7 @@ export const styles = StyleSheet.create({
       alignItems: "center",
     },
     calorieValue: {
-      color: "#45A557", // Green color for calories to match AddMealLogScreen
-      fontSize: 20,
+      color: "#45A557",
       fontWeight: "bold"
     },
     calorieLabel: {

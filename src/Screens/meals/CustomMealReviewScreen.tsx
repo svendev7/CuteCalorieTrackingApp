@@ -264,14 +264,12 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
     }
 
     try {
-      console.log(`💾 ${isSavingMeal ? 'SAVE & LOG' : 'LOG'} MEAL: Starting process`);
       setIsSaving(true);
       
       const totalMacros = contextTotalMacros; 
       const currentCartItems = [...cartItems];
 
       try {
-        console.log("Forcing reset of ALL cart items before adding meal");
         await forceResetAllCartItems(auth.currentUser.uid);
       } catch (clearError) {
         console.error("Error clearing cart in Firestore (pre-log):", clearError);
@@ -280,16 +278,27 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
       // Format the date in YYYY-MM-DD format for consistency
       const currentDate = new Date().toISOString().split('T')[0];
 
+      // Calculate the rounded macro values to ensure they are saved properly
+      const roundedProtein = Math.round(totalMacros.protein * 10) / 10;
+      const roundedCarbs = Math.round(totalMacros.carbs * 10) / 10;
+      const roundedFat = Math.round(totalMacros.fat * 10) / 10;
+      const roundedCalories = Math.round(totalMacros.calories);
+      
+      // Use a definitive meal name - if empty after trim, use first food name or default
+      const effectiveMealName = mealName.trim() || 
+        (currentCartItems.length > 0 && currentCartItems[0].name ? 
+          currentCartItems[0].name : 'Logged Meal');
+
       await addMeal({
         userId: auth.currentUser.uid,
-        mealName: mealName.trim() || (currentCartItems.length > 0 ? currentCartItems[0].name : 'Logged Meal'),
-        protein: totalMacros.protein,
-        carbs: totalMacros.carbs,
-        fat: totalMacros.fat,
-        calories: totalMacros.calories,
-        sugar: currentCartItems.reduce((sum, item) => sum + (item.sugar || 0) * (item.amount / 100), 0),
-        fibers: currentCartItems.reduce((sum, item) => sum + (item.fibers || 0) * (item.amount / 100), 0),
-        sodium: currentCartItems.reduce((sum, item) => sum + (item.sodium || 0) * (item.amount / 100), 0),
+        mealName: effectiveMealName,
+        protein: roundedProtein,
+        carbs: roundedCarbs,
+        fat: roundedFat,
+        calories: roundedCalories,
+        sugar: Math.round(currentCartItems.reduce((sum, item) => sum + (item.sugar || 0) * (item.amount / 100), 0) * 10) / 10,
+        fibers: Math.round(currentCartItems.reduce((sum, item) => sum + (item.fibers || 0) * (item.amount / 100), 0) * 10) / 10,
+        sodium: Math.round(currentCartItems.reduce((sum, item) => sum + (item.sodium || 0) * (item.amount / 100), 0)),
         date: currentDate,
         loggedTime: new Date().toISOString(),
         foods: currentCartItems.map(item => ({
@@ -313,7 +322,6 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
       contextClearCart();
       
       try {
-          console.log("Forcing reset of ALL cart items AFTER adding meal");
           await forceResetAllCartItems(auth.currentUser.uid);
       } catch (clearError) {
           console.error("Error clearing cart in Firestore (post-log):", clearError);
@@ -502,10 +510,29 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
   }
 
   const foodItem = (item: CartItem, index: number) => {
+    // Check if this is a meal or a food based on itemType
+    const isMeal = item.itemType === 'meal';
+    
+    // For meals, use the macros directly since they're already totals
+    // For foods, calculate based on the amount
+    let adjustedMacros;
+    
+    if (isMeal) {
+      // For meals, use the macros directly - they're already the full values
+      adjustedMacros = {
+        protein: item.protein || 0,
+        carbs: item.carbs || 0,
+        fat: item.fat || 0,
+        calories: item.calories || 0,
+        sodium: item.sodium || 0,
+        sugar: item.sugar || 0,
+        fibers: item.fibers || 0
+      };
+    } else {
+      // For food items, calculate based on ratio
     const baseAmount = 100;
     const ratio = (item.amount || 100) / baseAmount;
-    
-    const adjustedMacros = {
+      adjustedMacros = {
       protein: Math.round(item.protein * ratio),
       carbs: Math.round(item.carbs * ratio),
       fat: Math.round(item.fat * ratio),
@@ -514,6 +541,7 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
       sugar: Math.round((item.sugar || 0) * ratio),
       fibers: Math.round((item.fibers || 0) * ratio)
     };
+    }
     
     return (
       <View key={item.id} style={styles.foodItem}>

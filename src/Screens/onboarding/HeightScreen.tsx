@@ -6,7 +6,7 @@ const { width } = Dimensions.get('window');
 
 const HeightScreen = ({ onNext, onPrev, height, updateHeight }) => {
   const [heightValue, setHeightValue] = useState(height || '');
-  const [activeUnit, setActiveUnit] = useState('cm'); // 'cm' or 'ft'
+  const [activeUnit, setActiveUnit] = useState('cm'); 
   const [feet, setFeet] = useState(height ? Math.floor(parseInt(height) / 30.48).toString() : '');
   const [inches, setInches] = useState(height ? Math.round(parseInt(height) / 2.54 % 12).toString() : '');
 
@@ -15,12 +15,10 @@ const HeightScreen = ({ onNext, onPrev, height, updateHeight }) => {
   const inchesInputRef = useRef<TextInput>(null);
 
   const handleContinue = () => {
-    // Check if height is entered and valid
     if (activeUnit === 'cm' && heightValue) {
       updateHeight(heightValue);
       onNext();
     } else if (activeUnit === 'ft' && feet && inches) {
-      // Convert feet and inches to cm
       const totalInches = (parseInt(feet) * 12) + parseInt(inches);
       const heightInCm = Math.round(totalInches * 2.54).toString();
       updateHeight(heightInCm);
@@ -34,11 +32,9 @@ const HeightScreen = ({ onNext, onPrev, height, updateHeight }) => {
     setActiveUnit(unit);
     
     if (unit === 'cm' && feet && inches) {
-      // Convert feet and inches to cm
       const totalInches = (parseInt(feet) * 12) + parseInt(inches);
       setHeightValue(Math.round(totalInches * 2.54).toString());
     } else if (unit === 'ft' && heightValue) {
-      // Convert cm to feet and inches
       const totalInches = parseInt(heightValue) / 2.54;
       setFeet(Math.floor(totalInches / 12).toString());
       setInches(Math.round(totalInches % 12).toString());

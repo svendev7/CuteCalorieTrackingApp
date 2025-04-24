@@ -17,14 +17,12 @@ const LoginScreen = ({ onNext, onPrev, formData, updateFormData }) => {
       return;
     }
 
-    // Basic email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
       setError('Please enter a valid email address');
       return;
     }
 
-    // Basic password validation
     if (formData.password.length < 6) {
       setError('Password must be at least 6 characters long');
       return;
@@ -35,12 +33,10 @@ const LoginScreen = ({ onNext, onPrev, formData, updateFormData }) => {
       setError('');
       
       if (isLogin) {
-        // Handle login
         await signIn(formData.email, formData.password);
         Alert.alert('Success', 'Logged in successfully!');
         onNext();
       } else {
-        // Handle signup
         await signUp(formData.email, formData.password);
         Alert.alert('Success', 'Account created successfully!');
         onNext();

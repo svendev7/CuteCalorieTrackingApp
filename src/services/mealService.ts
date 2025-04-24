@@ -74,7 +74,7 @@ interface FoodData {
   createdAt?: any;
   updatedAt?: any;
   addedToCart?: boolean;
-  [key: string]: any; // Allow additional fields
+  [key: string]: any; 
 }
 
 export const addMeal = async (mealData: Omit<Meal, 'id' | 'createdAt' | 'updatedAt'>): Promise<Meal> => {
@@ -107,26 +107,42 @@ export const addMeal = async (mealData: Omit<Meal, 'id' | 'createdAt' | 'updated
 export const updateMeal = async (mealId: string, mealData: Partial<Omit<Meal, 'id' | 'createdAt' | 'updatedAt'>>): Promise<Meal> => {
   try {
     const mealRef = doc(db, 'meals', mealId);
+    
+    const mealSnapshot = await getDoc(mealRef);
+    if (!mealSnapshot.exists()) {
+      throw new Error('Meal not found for update');
+    }
+    
+    const existingMeal = mealSnapshot.data();
+    
+    // Preserve the original date and loggedTime
+    const originalDate = existingMeal.date;
+    const originalLoggedTime = existingMeal.loggedTime;
+
     const updateData = {
       ...mealData,
       updatedAt: serverTimestamp(),
       lastUsed: serverTimestamp(),
-      // If this is a logging operation, mark the meal as logged
-      ...(mealData.date || mealData.loggedTime ? { isLogged: true } : {})
+      // Explicitly preserve date and loggedTime
+      date: originalDate,
+      loggedTime: originalLoggedTime,
+      // Only update isLogged if explicitly provided in mealData
+      ...(mealData.isLogged !== undefined ? { isLogged: mealData.isLogged } : {})
     };
-
+    
     await updateDoc(mealRef, updateData);
     
-    // Fetch the updated meal to return
-    const mealSnapshot = await getDoc(mealRef);
-    if (!mealSnapshot.exists()) {
+    const updatedMealSnapshot = await getDoc(mealRef);
+    if (!updatedMealSnapshot.exists()) {
       throw new Error('Meal not found after update');
     }
     
-    return {
+    const finalMeal = {
       id: mealId,
-      ...mealSnapshot.data()
+      ...updatedMealSnapshot.data()
     } as Meal;
+    
+    return finalMeal;
   } catch (error) {
     console.error('Error updating meal:', error);
     throw error;
@@ -225,7 +241,7 @@ export const getRecentMealsByUserId = async (userId: string, limitCount: number 
     const q = query(
       mealsRef, 
       where('userId', '==', userId),
-      where('isLogged', '==', true),  // Only get meals that have been logged
+      where('isLogged', '==', true),  
       orderBy('lastUsed', 'desc'),
       limit(limitCount)
     );
@@ -299,10 +315,7 @@ export const toggleMealFavorite = async (mealId: string, isFavorite: boolean): P
   }
 };
 
-/**
- * Get user's foods by type (recent, created, favorite)
- * Note: This implementation completely ignores addedToCart status to prevent cart persistence issues
- */
+
 export const getUserFoodsByType = async (userId: string, type: string): Promise<FoodData[]> => {
   try {
     const userFoodsRef = collection(db, 'users', userId, 'foods');
@@ -310,8 +323,6 @@ export const getUserFoodsByType = async (userId: string, type: string): Promise<
     
     switch(type) {
       case 'recent':
-        // Changed: Get only foods that have been used recently by lastUsed timestamp,
-        // Never consider addedToCart status
         q = query(
           userFoodsRef,
           orderBy('lastUsed', 'desc'),
@@ -319,15 +330,12 @@ export const getUserFoodsByType = async (userId: string, type: string): Promise<
         );
         break;
       case 'created':
-        // Get foods created by user
         q = query(userFoodsRef, where('isUserCreated', '==', true));
         break;
       case 'favorite':
-        // Get favorite foods
         q = query(userFoodsRef, where('isFavorite', '==', true));
         break;
       default:
-        // Default to all foods
         q = userFoodsRef;
     }
     
@@ -337,7 +345,6 @@ export const getUserFoodsByType = async (userId: string, type: string): Promise<
     querySnapshot.forEach((doc) => {
       const data = doc.data() as Omit<FoodData, 'id'>;
       
-      // Force addedToCart to be false for every food, but keep the rest of the properties
       foods.push({
         id: doc.id,
         name: data.name || '',
@@ -346,7 +353,6 @@ export const getUserFoodsByType = async (userId: string, type: string): Promise<
         fat: data.fat || 0,
         calories: data.calories || 0,
         ...data,
-        // Override addedToCart regardless of what it was in the DB
         addedToCart: false
       });
     });
@@ -358,13 +364,9 @@ export const getUserFoodsByType = async (userId: string, type: string): Promise<
   }
 };
 
-/**
- * Update favorite status of a food or meal
- */
+
 export const updateFavoriteStatus = async (userId: string, itemId: string, isFavorite: boolean, itemType: 'food' | 'meal') => {
   try {
-    // Foods are stored in users/{userId}/foods/{foodId}
-    // Meals are stored in meals/{mealId}
     const itemRef = itemType === 'food' 
       ? doc(db, 'users', userId, 'foods', itemId) 
       : doc(db, 'meals', itemId);
@@ -381,13 +383,9 @@ export const updateFavoriteStatus = async (userId: string, itemId: string, isFav
   }
 };
 
-/**
- * Delete a user food or meal
- */
+
 export const deleteUserFood = async (userId: string, itemId: string, itemType: 'food' | 'meal') => {
   try {
-    // Foods are stored in users/{userId}/foods/{foodId}
-    // Meals are stored in meals/{mealId}
     const itemRef = itemType === 'food' 
       ? doc(db, 'users', userId, 'foods', itemId) 
       : doc(db, 'meals', itemId);
@@ -401,14 +399,11 @@ export const deleteUserFood = async (userId: string, itemId: string, itemType: '
   }
 };
 
-/**
- * Create or update a custom food
- */
+
 export const saveCustomFood = async (userId: string, food: FoodData) => {
   try {
     const userFoodsRef = collection(db, 'users', userId, 'foods');
     
-    // If food has an ID, update existing document
     if (food.id) {
       const foodRef = doc(db, 'users', userId, 'foods', food.id);
       await updateDoc(foodRef, {
@@ -417,7 +412,6 @@ export const saveCustomFood = async (userId: string, food: FoodData) => {
       });
       return food.id;
     } else {
-      // Create new food document
       const newFoodRef = await addDoc(userFoodsRef, {
         ...food,
         isUserCreated: true,
@@ -434,9 +428,7 @@ export const saveCustomFood = async (userId: string, food: FoodData) => {
   }
 };
 
-/**
- * Update a food's cart status and lastUsed timestamp
- */
+
 export const updateFoodCartStatus = async (userId: string, foodId: string, addedToCart: boolean): Promise<boolean> => {
   try {
     const foodRef = doc(db, 'users', userId, 'foods', foodId);
@@ -453,9 +445,7 @@ export const updateFoodCartStatus = async (userId: string, foodId: string, added
   }
 };
 
-/**
- * Clears cart status for all foods belonging to a user
- */
+
 export const clearAllCartItems = async (userId: string): Promise<boolean> => {
   try {
     if (!userId) {
@@ -467,7 +457,7 @@ export const clearAllCartItems = async (userId: string): Promise<boolean> => {
     const q = query(foodsRef, where('addedToCart', '==', true));
     const querySnapshot = await getDocs(q);
     
-    // Create a batch for better performance with multiple updates
+
     const batch = writeBatch(db);
     
     querySnapshot.docs.forEach(docSnapshot => {
@@ -478,9 +468,7 @@ export const clearAllCartItems = async (userId: string): Promise<boolean> => {
       });
     });
     
-    // Commit the batch
     await batch.commit();
-    console.log(`Successfully cleared cart status for ${querySnapshot.docs.length} items`);
     return true;
   } catch (error) {
     console.error('Error clearing all cart items:', error);
@@ -488,10 +476,7 @@ export const clearAllCartItems = async (userId: string): Promise<boolean> => {
   }
 };
 
-/**
- * Forcefully clears ALL cart items for a user, regardless of current status
- * This is more aggressive than clearAllCartItems and will update every food in the user's collection
- */
+
 export const forceResetAllCartItems = async (userId: string): Promise<boolean> => {
   if (!userId) {
     console.error('No user ID provided to forceResetAllCartItems');
@@ -499,22 +484,17 @@ export const forceResetAllCartItems = async (userId: string): Promise<boolean> =
   }
   
   try {
-    console.log('⚠️ FORCE RESETTING all cart items for user:', userId);
     
-    // Get ALL user foods, not just ones marked as in cart
     const foodsRef = collection(db, 'users', userId, 'foods');
     const querySnapshot = await getDocs(foodsRef);
     
     if (querySnapshot.empty) {
-      console.log('No foods found for user');
       return true;
     }
     
-    // Create a batch for better performance with multiple updates
     const batch = writeBatch(db);
     let updatedCount = 0;
     
-    // Update ALL foods to set addedToCart = false
     querySnapshot.docs.forEach(docSnapshot => {
       const foodRef = doc(db, 'users', userId, 'foods', docSnapshot.id);
       batch.update(foodRef, {
@@ -524,12 +504,9 @@ export const forceResetAllCartItems = async (userId: string): Promise<boolean> =
       updatedCount++;
     });
     
-    // Commit the batch
     await batch.commit();
-    console.log(`🧹 FORCE RESET: Updated ${updatedCount} food items to not be in cart`);
     return true;
   } catch (error) {
-    console.error('❌ Error in forceResetAllCartItems:', error);
     return false;
   }
 }; 

@@ -1,4 +1,3 @@
-// Screens/onboarding/WelcomeScreen.js
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { PebblyPal } from 'src/components/pebbly/PebblyPal';

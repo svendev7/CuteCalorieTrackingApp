@@ -4,7 +4,7 @@ import { MealComponent } from "../meal/MealComponent";
 import { styles } from "./MealViewerStyles"; 
 const { height } = Dimensions.get("window");
 
-// --- Interfaces (Make sure these match HomeScreen) ---
+
 interface MealData {
   id: string;
   mealName: string;
@@ -48,25 +48,20 @@ export const MealViewer: React.FC<MealViewerProps> = ({
   canLoadMore,
   onMealPress,
 }) => {
-  // Use Animated.Value for better performance
   const scrollY = useRef(new Animated.Value(0)).current;
   const scrollViewRef = useRef<any>(null);
   
-  // Track raw scroll position using state
   const [scrollPosition, setScrollPosition] = useState(0);
   
-  // Define constants related to layout
   const bottomSheetVisibleHeightRatio = 0.6;
   const topContainerMarginTopRatio = 0.47;
   const bottomSheetHeight = height * bottomSheetVisibleHeightRatio;
   const firstTopContainerOffset = bottomSheetHeight * topContainerMarginTopRatio;
 
-  // Always keep footer visible
   useEffect(() => {
     onFooterVisibilityChange(true);
   }, []);
 
-  // Handle scroll events to update scroll position
   const handleScroll = (event) => {
     setScrollPosition(event.nativeEvent.contentOffset.y);
   };
@@ -81,34 +76,30 @@ export const MealViewer: React.FC<MealViewerProps> = ({
     return Math.min(1, Math.max(0, consumed / goal));
   };
 
-  // Opacity for the fixed top shadow (appears when scrolled past the threshold)
   const fixedShadowOpacity = scrollY.interpolate({
     inputRange: [firstTopContainerOffset - 1, firstTopContainerOffset],
-    outputRange: [0, 1], // Instant transition 0 -> 1
+    outputRange: [0, 1], 
     extrapolate: 'clamp'
   });
 
-  // Opacity for the handle bar inside the scroll view (disappears when scrolled past threshold)
   const scrollableHandleOpacity = scrollY.interpolate({
     inputRange: [firstTopContainerOffset - 1, firstTopContainerOffset],
-    outputRange: [1, 0], // Instant transition 1 -> 0
+    outputRange: [1, 0], 
     extrapolate: 'clamp'
   });
 
   return (
     <View style={styles.bottomSheetWrapper}>
-      {/* Fixed Top Shadow - Always rendered, opacity controlled */}
       <Animated.View 
         style={[
-          styles.bottomSheetTopShadow, // Base styles (background, radius, height)
+          styles.bottomSheetTopShadow, 
           {
-            opacity: fixedShadowOpacity, // Animated opacity
-            zIndex: 20 // Ensure it's above scroll content
+            opacity: fixedShadowOpacity, 
+            zIndex: 20 
           }
         ]}
-        pointerEvents="none" // Make it non-interactive
+        pointerEvents="none" 
       >
-        {/* Handle bar within the fixed shadow */}
         <View style={styles.handleBar} />
       </Animated.View>
 
@@ -120,10 +111,10 @@ export const MealViewer: React.FC<MealViewerProps> = ({
         alwaysBounceVertical={true}
         decelerationRate="normal"
         showsVerticalScrollIndicator={false}
-        scrollEventThrottle={1} // Use 1 for highest fidelity
+        scrollEventThrottle={1} 
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: true } // Use native driver for performance
+          { useNativeDriver: true } 
         )}
         overScrollMode="always"
       >
@@ -135,7 +126,6 @@ export const MealViewer: React.FC<MealViewerProps> = ({
 
           return (
             <React.Fragment key={day.date}>
-              {/* Top Container (Summary for the day) */}
               <View
                 style={[
                   styles.topContainer,
@@ -146,15 +136,13 @@ export const MealViewer: React.FC<MealViewerProps> = ({
                   },
                 ]}
               >
-                {/* Handle Container inside ScrollView - Opacity controlled */}
                 {index === 0 && (
                   <Animated.View 
                     style={[
-                      styles.bottomSheetHandle, // Container for positioning
-                      { opacity: scrollableHandleOpacity } // Animated opacity
+                      styles.bottomSheetHandle, 
+                      { opacity: scrollableHandleOpacity } 
                     ]}
                   >
-                    {/* The actual handle bar element */}
                     <View style={styles.handleBar} />
                   </Animated.View>
                 )}
@@ -165,7 +153,6 @@ export const MealViewer: React.FC<MealViewerProps> = ({
                     <Text style={styles.calorieSubtitle}>REMAINING</Text>
                   </View>
                   <View style={styles.macroRow}>
-                    {/* Protein */}
                     <View style={styles.macroColumn}>
                       <Text style={styles.macroLabel}>Protein</Text>
                       <View style={styles.macroBarContainer}>
@@ -175,7 +162,6 @@ export const MealViewer: React.FC<MealViewerProps> = ({
                         {`${Math.round(day.proteinConsumed)} / ${day.proteinGoal} g`}
                       </Text>
                     </View>
-                    {/* Carbs */}
                     <View style={styles.macroColumn}>
                       <Text style={styles.macroLabel}>Carbs</Text>
                       <View style={styles.macroBarContainer}>
@@ -185,7 +171,6 @@ export const MealViewer: React.FC<MealViewerProps> = ({
                          {`${Math.round(day.carbsConsumed)} / ${day.carbsGoal} g`}
                       </Text>
                     </View>
-                    {/* Fat */}
                     <View style={styles.macroColumn}>
                       <Text style={styles.macroLabel}>Fat</Text>
                       <View style={styles.macroBarContainer}>
@@ -199,7 +184,6 @@ export const MealViewer: React.FC<MealViewerProps> = ({
                 </View>
               </View>
 
-              {/* Bottom Container (Meals for the day) */}
               <View style={[styles.bottomContainer, { marginTop: 10 }]}>
                 <View style={styles.expandedContent}>
                   <View style={styles.dateContainer}>
@@ -230,13 +214,11 @@ export const MealViewer: React.FC<MealViewerProps> = ({
                 </View>
               </View>
 
-              {/* Gap between days */}
               {index < daysData.length - 1 && <View style={{ height: 15 }} />}
             </React.Fragment>
           );
         })}
 
-        {/* Load Previous Day Button */}
         {canLoadMore && (
           <TouchableOpacity
             style={styles.loadPreviousDayButton}
@@ -247,7 +229,6 @@ export const MealViewer: React.FC<MealViewerProps> = ({
           </TouchableOpacity>
         )}
 
-        {/* Final padding */}
         <View style={{ height: 80 }} />
       </Animated.ScrollView>
     </View>
