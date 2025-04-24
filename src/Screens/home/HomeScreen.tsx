@@ -10,7 +10,7 @@ import StoreIcon from "@assets/Store.svg"
 const { width, height } = Dimensions.get("window")
 import { PebblyPal } from "../../components/pebbly/PebblyPal"
 import { MealViewer } from "../../components/mealViewer/MealViewer"
-import { MealEditScreen } from "../meals/MealEditScreen"
+import MealEditScreen from "../editting/MealEditScreen"
 import AnimatedFooter from "../../components/footer/AnimatedFooter"
 import type { Meal } from "../../services/mealService"
 import { getMealsByDate, updateMeal, deleteMeal } from "../../services/mealService"

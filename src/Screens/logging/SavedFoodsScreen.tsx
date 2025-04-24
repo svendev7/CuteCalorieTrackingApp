@@ -37,8 +37,10 @@ import {
 } from "../../services/mealService"
 import { Swipeable, GestureHandlerRootView } from "react-native-gesture-handler"
 import { useCart } from "../../context/CartContext"
-import FoodEditScreen from "./FoodEditScreen"
+import FoodEditScreen from "../editting/FoodEditScreen"
 import Toast from 'react-native-toast-message'
+import Header from "../../components/header/Header"
+import SearchBar from "../../components/header/SearchBar"
 
 const { width, height } = Dimensions.get("window")
 
@@ -73,11 +75,11 @@ interface MealItem {
   servingSize?: number
 }
 
-interface AddMealLogScreenProps {
+interface SavedFoodsScreenProps {
   navigation: any // Add proper navigation types later
 }
 
-const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
+const SavedFoodsScreen: React.FC<SavedFoodsScreenProps> = ({ navigation }) => {
   const [activeTab, setActiveTab] = useState("Foods")
   const [searchText, setSearchText] = useState("")
   const [activeFilter, setActiveFilter] = useState("Recent")
@@ -150,11 +152,10 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
   useEffect(() => {
     fetchMeals()
   }, [activeFilter, activeTab])
-
-  // Add a navigation focus listener to refresh data when returning to this screen
+  
+  // Add a navigation focus listener to clear cart state when returning to this screen
   useEffect(() => {
     const unsubscribe = navigation.addListener?.('focus', () => {
-      console.log("🚨 SCREEN FOCUSED: Aggressively clearing cart state via Context");
       
       // Clear local cart state immediately using Context
       contextClearCart(); // Use context clearCart
@@ -164,7 +165,6 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
           const currentUser = auth.currentUser;
           if (currentUser) {
             await forceResetAllCartItems(currentUser.uid);
-            fetchMeals(); // Refresh data
           }
         } catch (error) {
           console.error("Error clearing cart on screen focus:", error);
@@ -181,7 +181,7 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
       }
     };
   }, [navigation, contextClearCart]); // Added contextClearCart dependency
-
+  
   // Add a mechanism to refresh foods when returning from add/edit screens
   useEffect(() => {
     // Setup a refresh mechanism when returning from add/edit flows
@@ -192,18 +192,22 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
     return () => clearTimeout(refreshTimerId);
   }, []);
 
-  // Add a listener to refresh data when screens change
+  // Add smarter refresh when screen becomes active
   useEffect(() => {
-    // Create a refresh interval that checks for updates
-    const refreshInterval = setInterval(() => {
-      const currentUser = auth.currentUser;
-      if (currentUser) {
-        fetchMeals();
-      }
-    }, 2000); // Check every 2 seconds while screen is active
+    // Initial data load when the component mounts
+    fetchMeals();
     
-    return () => clearInterval(refreshInterval);
-  }, []);
+    // Set up a listener for the navigation focus event for data refresh
+    const unsubscribe = navigation.addListener?.('focus', () => {
+      fetchMeals();
+    });
+    
+    return () => {
+      if (unsubscribe) {
+        unsubscribe.remove?.();
+      }
+    };
+  }, [navigation]);
 
   const fetchMeals = async () => {
     try {
@@ -899,7 +903,6 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
 
   // Function to clear the cart completely (simplified using context)
   const clearCart = useCallback(async () => {
-    console.log("🧹 MANUAL CART CLEAR: Aggressively clearing cart initiated via Context");
     
     // Clear context state immediately
     contextClearCart(); // Call context clearCart
@@ -908,7 +911,6 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
     try {
       const currentUser = auth.currentUser;
       if (currentUser) {
-        console.log("Calling forceResetAllCartItems for user:", currentUser.uid);
         await forceResetAllCartItems(currentUser.uid);
         // Optionally re-fetch data after clearing backend state
         // fetchMeals(); // Consider if needed - focus listener might handle this
@@ -1018,47 +1020,29 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
             </View>
           )}
           
-        {/* Header with search bar */}
-        <View style={styles.headerContainer}>
-          {/* Header matching other screens exactly */}
-          <View style={styles.header}>
-            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}> 
-              <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>Log Items</Text>
-            <TouchableOpacity onPress={handleCartPress} style={styles.cartButton}>
+        {/* Using the new SharedHeader component */}
+        <Header
+          title="Log Items"
+          onBack={() => navigation.goBack()}
+          rightIcon={
+            <View>
               <Ionicons name="cart-outline" size={24} color="#FFFFFF" />
-              {/* Use itemCount from context */}
-              {itemCount > 0 && ( 
+              {itemCount > 0 && (
                 <View style={styles.cartBadge}>
-                  {/* Use itemCount from context */}
-                  <Text style={styles.cartBadgeText}>{itemCount}</Text> 
+                  <Text style={styles.cartBadgeText}>{itemCount}</Text>
                 </View>
               )}
-            </TouchableOpacity>
-          </View>
-          
-          {/* Only render search container if not showing a sticky search */}
-          {!searchBarSticky && (
-            <View style={styles.searchContainer}>
-              <View style={styles.searchInputContainer}>
-                <Ionicons name="search" size={18} color="#666666" style={styles.searchIcon} />
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder="Search..."
-                  placeholderTextColor="#666666"
-                  value={searchText}
-                  onChangeText={setSearchText}
-                />
-                {searchText.length > 0 && (
-                  <TouchableOpacity onPress={() => setSearchText("")} style={styles.clearButton}>
-                    <Ionicons name="close-circle" size={18} color="#666666" />
-                  </TouchableOpacity>
-                )}
-              </View>
             </View>
-          )}
-        </View>
+          }
+          rightIconAction={handleCartPress}
+          showSearch={!searchBarSticky}
+          searchComponent={
+            <SearchBar
+              value={searchText}
+              onChangeText={setSearchText}
+            />
+          }
+        />
 
         {/* Main Content Area */}
         <ScrollView 
@@ -1070,23 +1054,10 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
           {/* Sticky search bar - remove condition to make it consistent for all tabs */}
           {searchBarSticky && (
             <View style={styles.stickySearchContainer}>
-              <View style={styles.searchInputContainer}>
-                <Ionicons name="search" size={18} color="#666666" style={styles.searchIcon} />
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder="Search..."
-                  placeholderTextColor="#666666"
-                  value={searchText}
-                  onChangeText={setSearchText}
-                  returnKeyType="search"
-                  clearButtonMode="while-editing"
-                />
-                {searchText.length > 0 && (
-                  <TouchableOpacity onPress={() => setSearchText("")} style={styles.clearButton}>
-                    <Ionicons name="close-circle" size={18} color="#666666" />
-                  </TouchableOpacity>
-                )}
-              </View>
+              <SearchBar
+                value={searchText}
+                onChangeText={setSearchText}
+              />
             </View>
           )}
           
@@ -1191,45 +1162,18 @@ const AddMealLogScreen: React.FC<AddMealLogScreenProps> = ({ navigation }) => {
 
 const styles = StyleSheet.create({
   safeArea: {
-    // Added SafeAreaView style
     flex: 1,
-    backgroundColor: "#000000", // Dark background
+    backgroundColor: "#000000",
   },
   container: {
     flex: 1,
-    backgroundColor: "#000000", // Adding background color to container
-  },
-  headerContainer: {
     backgroundColor: "#000000",
-    borderBottomWidth: 1,
-    borderBottomColor: "#2E2E2E",
-    zIndex: 10, // Make sure header is above content
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    width: "100%",
-  },
-  backButton: {
-    padding: 5,
-  },
-  headerTitle: {
-    color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "600",
-  },
-  cartButton: {
-    padding: 5,
-    width: 40, // Match the spacer width in other headers
   },
   cartBadge: {
     position: "absolute",
     right: -5,
     top: -5,
-    backgroundColor: "#45A557", // Green badge
+    backgroundColor: "#45A557",
     borderRadius: 10,
     width: 20,
     height: 20,
@@ -1242,12 +1186,16 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   scrollView: {
-    flex: 1, // Takes remaining space above footer
-    // Remove top padding as it's now handled by the header
+    flex: 1,
   },
   scrollViewContent: {
-    paddingTop: 10, // Reduced top padding since search bar is now in header
-    paddingBottom: 20, // Add some padding below the list
+    paddingTop: 10,
+    paddingBottom: 20,
+  },
+  stickySearchContainer: {
+    marginHorizontal: 20,
+    marginTop: 10,
+    marginBottom: 15,
   },
   tabContainer: {
     flexDirection: "row",
@@ -1261,7 +1209,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     width: "50%",
     height: "100%",
-    backgroundColor: "#1A1A1A", // Match add food button background
+    backgroundColor: "#1A1A1A",
     borderRadius: 8,
     zIndex: 0,
   },
@@ -1277,27 +1225,6 @@ const styles = StyleSheet.create({
   },
   activeTabText: {
     color: "#FFFFFF",
-  },
-  searchContainer: {
-    marginHorizontal: 20,
-    marginVertical: 10,
-    marginBottom: 15,
-  },
-  searchInputContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#1C1C1E",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-  },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    paddingVertical: 12,
-    color: "#FFFFFF",
-    fontSize: 16,
   },
   addFoodButton: {
     flexDirection: "row",
@@ -1326,7 +1253,7 @@ const styles = StyleSheet.create({
   filterIndicator: {
     position: "absolute",
     height: "100%",
-    backgroundColor: "#1A1A1A", // Match add food button background
+    backgroundColor: "#1A1A1A",
     borderRadius: 8,
     zIndex: 0,
   },
@@ -1381,7 +1308,7 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 15,
     fontWeight: "600",
-    marginBottom: 4, // Reduced spacing
+    marginBottom: 4,
   },
   macroWrapper: {
     justifyContent: "center",
@@ -1429,13 +1356,13 @@ const styles = StyleSheet.create({
   macroSeparator: {
     height: 1,
     backgroundColor: "#2E2E2E",
-    marginVertical: 4, // Reduced vertical margin
+    marginVertical: 4,
   },
   footerRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginTop: 2, // Reduced margin
+    marginTop: 2,
   },
   itemCaloriesValue: {
     color: "#45A557",
@@ -1447,7 +1374,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   addButton: {
-    backgroundColor: "#45A557", // Green add button
+    backgroundColor: "#45A557",
     borderRadius: 20,
     width: 36,
     height: 36,
@@ -1669,14 +1596,14 @@ const styles = StyleSheet.create({
   },
   leftAction: {
     width: width * 0.2,
-    backgroundColor: "#FFD700", // Yellow for favorite
+    backgroundColor: "#FFD700",
     justifyContent: "center",
     marginBottom: 10,
     borderRadius: 12,
   },
   rightAction: {
     width: width * 0.2,
-    backgroundColor: "#FF3B30", // iOS red for delete
+    backgroundColor: "#FF3B30",
     justifyContent: "center",
     marginBottom: 10,
     borderRadius: 12,
@@ -1711,23 +1638,10 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    zIndex: 9999,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    zIndex: 100,
     justifyContent: "center",
     alignItems: "center",
-  },
-  stickySearchContainer: {
-    backgroundColor: "#1C1C1E",
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-    width: "100%",
-    zIndex: 10,
   },
   clearButton: {
     padding: 5,
@@ -1749,4 +1663,4 @@ const styles = StyleSheet.create({
   },
 })
 
-export default AddMealLogScreen
+export default SavedFoodsScreen

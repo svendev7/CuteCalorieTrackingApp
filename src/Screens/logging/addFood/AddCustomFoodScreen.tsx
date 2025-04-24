@@ -1,7 +1,4 @@
-"use client"
-
-import type React from "react"
-import { useState, useRef, useEffect } from "react"
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,263 +8,162 @@ import {
   StyleSheet,
   Dimensions,
   Image,
-  Modal,
-  Animated,
-  Alert,
-  KeyboardAvoidingView,
   Platform,
-  TouchableWithoutFeedback,
+  Animated,
   Keyboard,
+  SafeAreaView,
+  Alert,
   ActivityIndicator,
-} from "react-native"
-import { MaterialCommunityIcons, Ionicons, AntDesign } from "@expo/vector-icons"
-import * as ImagePicker from 'expo-image-picker'
-import { auth } from "../../config/firebase"
-import { updateFavoriteStatus, deleteUserFood, saveCustomFood } from "../../services/mealService"
-import Toast from 'react-native-toast-message'
+  KeyboardAvoidingView,
+  TouchableWithoutFeedback,
+  Modal,
+} from 'react-native';
+import { MaterialCommunityIcons, Ionicons, AntDesign } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import { auth } from '../../../config/firebase';
+import { saveCustomFood } from '../../../services/mealService';
+import Toast from 'react-native-toast-message';
+import Header from '../../../components/header/Header';
+import { NutrientInput } from '../../../components/inputs';
 
-const { width, height } = Dimensions.get("window")
+const { width, height } = Dimensions.get('window');
 
-interface FoodItem {
-  id: string
-  name: string
-  protein: number
-  carbs: number
-  fat: number
-  calories: number
-  sodium?: number
-  sugar?: number
-  fibers?: number
-  type?: "Recent" | "Created" | "Favorites"
-  isFavorite?: boolean
-  servingSize?: number
-  servingUnit?: string
-  imageUrl?: string
-  isUserCreated?: boolean
+// Define a type for the food item
+interface CustomFood {
+  id?: string;
+  name: string;
+  protein: number;
+  carbs: number;
+  fat: number;
+  calories: number;
+  sugar: number;
+  fibers: number;
+  sodium: number;
+  servingSize: number;
+  servingUnit: string;
+  imageUrl?: string;
+  isFavorite: boolean;
+  isUserCreated?: boolean;
 }
 
-interface FoodEditScreenProps {
-  food: FoodItem
-  onClose: () => void
-  onSave: (updatedFood: FoodItem) => void
-  onDelete: (foodId: string) => void
-  visible: boolean
+interface AddCustomFoodScreenProps {
+  navigation: any;
+  route?: { params?: { foodToEdit?: CustomFood } };
 }
 
-export const FoodEditScreen: React.FC<FoodEditScreenProps> = ({ food, onClose, onSave, onDelete, visible }) => {
-  const [editedFood, setEditedFood] = useState<FoodItem>({ 
-    ...food,
-    servingSize: food.servingSize || 100,
-    servingUnit: food.servingUnit || 'g',
-    isFavorite: food.isFavorite || false
-  })
+const AddCustomFoodScreen: React.FC<AddCustomFoodScreenProps> = ({ navigation, route }) => {
+  const foodToEdit = route?.params?.foodToEdit;
+  const isEditing = !!foodToEdit;
+  const contentOffset = useRef(new Animated.Value(0)).current;
+  const [isLoading, setIsLoading] = useState(false);
   
+  // Initialize food details
+  const [foodDetails, setFoodDetails] = useState<CustomFood>({
+    name: '',
+    protein: 0,
+    carbs: 0,
+    fat: 0,
+    calories: 0,
+    sugar: 0,
+    fibers: 0,
+    sodium: 0,
+    servingSize: 100,
+    servingUnit: 'g',
+    isFavorite: false,
+    isUserCreated: true
+  });
+  
+  // Input values as strings for TextInput
   const [inputValues, setInputValues] = useState({
-    name: food.name,
-    protein: food.protein.toString(),
-    carbs: food.carbs.toString(),
-    fat: food.fat.toString(),
-    calories: food.calories.toString(),
-    sodium: (food.sodium || 0).toString(),
-    sugar: (food.sugar || 0).toString(),
-    fibers: (food.fibers || 0).toString(),
-    servingSize: (food.servingSize || 100).toString(),
-  })
+    name: '',
+    protein: '0',
+    carbs: '0',
+    fat: '0',
+    calories: '0',
+    sugar: '0',
+    fibers: '0',
+    sodium: '0',
+    servingSize: '100',
+  });
   
-  const [servingUnit, setServingUnit] = useState(food.servingUnit || 'g')
-  const [isSaving, setSaving] = useState(false)
-  const contentOffset = useRef(new Animated.Value(0)).current
+  const [servingUnit, setServingUnit] = useState('g');
 
-  // Add effect to update states when food prop changes
+  // Update state if editing an existing food
   useEffect(() => {
-    setEditedFood({
-      ...food,
-      servingSize: food.servingSize || 100,
-      servingUnit: food.servingUnit || 'g',
-      isFavorite: food.isFavorite || false
-    })
-    
-    setInputValues({
-      name: food.name,
-      protein: food.protein.toString(),
-      carbs: food.carbs.toString(),
-      fat: food.fat.toString(),
-      calories: food.calories.toString(),
-      sodium: (food.sodium || 0).toString(),
-      sugar: (food.sugar || 0).toString(),
-      fibers: (food.fibers || 0).toString(),
-      servingSize: (food.servingSize || 100).toString(),
-    })
-    
-    setServingUnit(food.servingUnit || 'g')
-  }, [food])
-
-  const handleSave = async () => {
-    setSaving(true)
-    
-    try {
-      // Prepare updated food object
-      const updatedFood: FoodItem = {
-        ...food,
-        ...editedFood,
-        servingUnit: servingUnit,
-        servingSize: parseInt(inputValues.servingSize, 10) || 100,
-        // Make sure all macros are parsed as numbers
-        protein: parseFloat(inputValues.protein) || 0,
-        carbs: parseFloat(inputValues.carbs) || 0,
-        fat: parseFloat(inputValues.fat) || 0,
-        calories: parseFloat(inputValues.calories) || 0,
-        sodium: parseFloat(inputValues.sodium) || 0,
-        sugar: parseFloat(inputValues.sugar) || 0,
-        fibers: parseFloat(inputValues.fibers) || 0
-      }
-
-      // Save and close
-      await onSave(updatedFood)
+    if (isEditing && foodToEdit) {
+      setFoodDetails({
+        ...foodToEdit,
+        name: foodToEdit.name || '',
+        servingSize: foodToEdit.servingSize || 100,
+        servingUnit: foodToEdit.servingUnit || 'g',
+        sugar: foodToEdit.sugar || 0,
+        fibers: foodToEdit.fibers || 0,
+        sodium: foodToEdit.sodium || 0
+      });
       
-      // Show success toast
-      Toast.show({
-        type: 'success',
-        text1: 'Food Updated',
-        text2: 'Your changes have been saved successfully',
-        position: 'bottom',
-      })
-    } catch (error) {
-      console.error('Error saving food:', error)
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Failed to save changes',
-        position: 'bottom',
-      })
-    } finally {
-      setSaving(false)
+      setInputValues({
+        name: foodToEdit.name || '',
+        protein: (foodToEdit.protein || 0).toString(),
+        carbs: (foodToEdit.carbs || 0).toString(),
+        fat: (foodToEdit.fat || 0).toString(),
+        calories: (foodToEdit.calories || 0).toString(),
+        sugar: (foodToEdit.sugar || 0).toString(),
+        fibers: (foodToEdit.fibers || 0).toString(),
+        sodium: (foodToEdit.sodium || 0).toString(),
+        servingSize: (foodToEdit.servingSize || 100).toString(),
+      });
+      
+      setServingUnit(foodToEdit.servingUnit || 'g');
     }
-  }
-
-  const handleDeleteFood = () => {
-    Alert.alert(
-      "Delete Food",
-      `Are you sure you want to delete ${food.name}?`,
-      [
-        {
-          text: "Cancel",
-          style: "cancel"
-        },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => {
-            onDelete(food.id)
-          }
-        }
-      ]
-    )
-  }
-  
-  const handleToggleFavorite = async () => {
-    try {
-      // Update locally first (optimistic UI update)
-      setEditedFood(prev => ({
-        ...prev,
-        isFavorite: !prev.isFavorite
-      }))
-      
-      // Update in backend
-      const currentUser = auth.currentUser
-      if (!currentUser) throw new Error("User not authenticated")
-      
-      await updateFavoriteStatus(
-        currentUser.uid,
-        food.id,
-        !editedFood.isFavorite,
-        "food"
-      )
-      
-      Toast.show({
-        type: 'success',
-        text1: editedFood.isFavorite ? 'Removed from Favorites' : 'Added to Favorites',
-        position: 'bottom',
-      })
-    } catch (error) {
-      // Revert on error
-      setEditedFood(prev => ({
-        ...prev,
-        isFavorite: !prev.isFavorite
-      }))
-      
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Failed to update favorite status',
-        position: 'bottom',
-      })
-    }
-  }
-
-  const handleInputChange = (field: keyof FoodItem, value: string) => {
-    // Update input field value
-    setInputValues(prev => ({
-      ...prev,
-      [field]: value
-    }))
-    
-    // For numeric fields, update the editedFood state
-    if (
-      field === "protein" ||
-      field === "carbs" ||
-      field === "fat" ||
-      field === "calories" ||
-      field === "sodium" ||
-      field === "sugar" ||
-      field === "fibers" ||
-      field === "servingSize"
-    ) {
-      const numberValue = value === "" ? 0 : Number.parseFloat(value)
-      if (!isNaN(numberValue)) {
-        setEditedFood(prev => ({
-          ...prev,
-          [field]: numberValue
-        }))
-      }
-    } else {
-      // For non-numeric fields like name
-      setEditedFood(prev => ({
-        ...prev,
-        [field]: value
-      }))
-    }
-  }
-
-  const handleInputBlur = (field: keyof FoodItem) => {
-    if (inputValues[field] === "") {
-      setInputValues(prev => ({
-        ...prev,
-        [field]: field === "name" ? "Unnamed Food" : "0"
-      }))
-    }
-    
-    // Animate content back down
-    Animated.timing(contentOffset, {
-      toValue: 0,
-      duration: 300,
-      useNativeDriver: true,
-    }).start()
-  }
+  }, [foodToEdit, isEditing]);
 
   const handleInputFocus = () => {
-    // Animate content up when keyboard appears
     Animated.timing(contentOffset, {
       toValue: -200,
       duration: 300,
       useNativeDriver: true,
-    }).start()
-  }
-  
+    }).start();
+  };
+
+  const handleInputBlur = (field: string) => {
+    if (inputValues[field] === '') {
+      if (field === 'name') {
+        setInputValues(prev => ({ ...prev, [field]: 'Unnamed Food' }));
+      } else {
+        setInputValues(prev => ({ ...prev, [field]: '0' }));
+      }
+    }
+    
+    Animated.timing(contentOffset, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handleInputChange = (field: string, value: string) => {
+    // Update input value
+    setInputValues(prev => ({ ...prev, [field]: value }));
+    
+    // For numeric fields
+    if (field !== 'name') {
+      const numberValue = value === '' ? 0 : Number.parseFloat(value);
+      if (!isNaN(numberValue)) {
+        setFoodDetails(prev => ({ ...prev, [field]: numberValue }));
+      }
+    } else {
+      // For name field
+      setFoodDetails(prev => ({ ...prev, [field]: value }));
+    }
+  };
+
+  const toggleFavorite = () => {
+    setFoodDetails(prev => ({ ...prev, isFavorite: !prev.isFavorite }));
+  };
+
   const handleAddImage = async () => {
     try {
-      // Request permission
-      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync()
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       
       if (permissionResult.granted === false) {
         Toast.show({
@@ -275,49 +171,115 @@ export const FoodEditScreen: React.FC<FoodEditScreenProps> = ({ food, onClose, o
           text1: 'Permission Required',
           text2: 'You need to grant camera roll permissions to add an image',
           position: 'bottom',
-        })
-        return
+        });
+        return;
       }
       
-      // Launch image picker
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [4, 3],
         quality: 0.8,
-      })
+      });
       
       if (!result.canceled) {
-        // Use the selected image URI
-        setEditedFood(prev => ({
+        setFoodDetails(prev => ({
           ...prev,
           imageUrl: result.assets[0].uri
-        }))
+        }));
         
         Toast.show({
           type: 'success',
           text1: 'Image Added',
           text2: 'Your image has been added successfully',
           position: 'bottom',
-        })
+        });
       }
     } catch (error) {
-      console.error('Error picking image:', error)
+      console.error('Error picking image:', error);
       Toast.show({
         type: 'error',
         text1: 'Error',
         text2: 'Failed to add image',
         position: 'bottom',
-      })
+      });
     }
-  }
+  };
+
+  const handleSave = async () => {
+    // Validate inputs
+    if (!foodDetails.name.trim()) {
+      Alert.alert('Error', 'Please enter a food name');
+      return;
+    }
+    
+    // Ensure serving size is at least 1
+    if (!foodDetails.servingSize || foodDetails.servingSize < 1) {
+      setFoodDetails(prev => ({ ...prev, servingSize: 1 }));
+      setInputValues(prev => ({ ...prev, servingSize: '1' }));
+    }
+
+    setIsLoading(true);
+    
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        throw new Error('User not authenticated');
+      }
+      
+      // Prepare food data for saving
+      const foodData = {
+        ...foodDetails,
+        name: foodDetails.name.trim(),
+        isUserCreated: true,
+        isFavorite: foodDetails.isFavorite,
+        servingUnit: servingUnit,
+        // Parse all macro values as numbers
+        protein: parseFloat(inputValues.protein) || 0,
+        carbs: parseFloat(inputValues.carbs) || 0,
+        fat: parseFloat(inputValues.fat) || 0,
+        calories: parseFloat(inputValues.calories) || 0,
+        sodium: parseFloat(inputValues.sodium) || 0,
+        sugar: parseFloat(inputValues.sugar) || 0,
+        fibers: parseFloat(inputValues.fibers) || 0,
+        servingSize: parseInt(inputValues.servingSize, 10) || 100
+      };
+      
+      // Save to Firestore
+      await saveCustomFood(currentUser.uid, foodData);
+      
+      // Show success message in toast and close the screen
+      Toast.show({
+        type: 'success',
+        text1: 'Food Saved',
+        text2: 'Your food has been saved successfully',
+        position: 'bottom',
+      });
+      
+      // Use the correct navigation method
+      if (navigation.goBack) {
+        navigation.goBack();
+      }
+      
+    } catch (error) {
+      console.error('Error saving food:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to save food. Please try again.',
+        position: 'bottom',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
-    <Modal 
-      animationType="slide" 
-      transparent={true} 
-      visible={visible} 
-      onRequestClose={onClose}
+    <Modal
+      animationType="slide"
+      transparent={true}
+      visible={true}
+      onRequestClose={() => navigation.goBack()}
       statusBarTranslucent
     >
       <KeyboardAvoidingView
@@ -326,19 +288,19 @@ export const FoodEditScreen: React.FC<FoodEditScreenProps> = ({ food, onClose, o
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <View style={styles.modalView}>
-            <View style={styles.header}>
-              <TouchableOpacity onPress={onClose} style={styles.backButton}>
-                <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-              </TouchableOpacity>
-              <Text style={styles.headerTitle}>Edit Food</Text>
-              <TouchableOpacity onPress={handleToggleFavorite} style={styles.favoriteButton}>
+            <Header
+              title={isEditing ? 'Edit Food' : 'Add Custom Food'}
+              onBack={() => navigation.goBack()}
+              rightIcon={
                 <AntDesign 
-                  name={editedFood.isFavorite ? "star" : "staro"} 
+                  name={foodDetails.isFavorite ? "star" : "staro"} 
                   size={22} 
-                  color={editedFood.isFavorite ? "#FFD700" : "#FFFFFF"} 
+                  color={foodDetails.isFavorite ? "#FFD700" : "#FFFFFF"} 
                 />
-              </TouchableOpacity>
-            </View>
+              }
+              rightIconAction={toggleFavorite}
+              containerStyle={styles.headerCustomStyle}
+            />
 
             <ScrollView
               style={styles.scrollView}
@@ -348,12 +310,12 @@ export const FoodEditScreen: React.FC<FoodEditScreenProps> = ({ food, onClose, o
               <Animated.View style={[styles.contentContainer, { transform: [{ translateY: contentOffset }] }]}>
                 <View style={styles.imageContainer}>
                   <Image
-                    source={{ uri: editedFood.imageUrl || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=400" }}
+                    source={{ uri: foodDetails.imageUrl || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=400" }}
                     style={styles.foodImage}
                     resizeMode="cover"
                   />
                   <TouchableOpacity style={styles.changeImageButton} onPress={handleAddImage}>
-                    <Text style={styles.changeImageText}>{editedFood.imageUrl ? 'Change Image' : 'Add Image'}</Text>
+                    <Text style={styles.changeImageText}>{foodDetails.imageUrl ? 'Change Image' : 'Add Image'}</Text>
                   </TouchableOpacity>
                 </View>
 
@@ -510,20 +472,15 @@ export const FoodEditScreen: React.FC<FoodEditScreenProps> = ({ food, onClose, o
             </ScrollView>
 
             <View style={styles.buttonContainer}>
-              <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteFood}>
-                <MaterialCommunityIcons name="delete-outline" size={20} color="#FF3B30" />
-                <Text style={styles.deleteButtonText}>Delete</Text>
-              </TouchableOpacity>
-
               <TouchableOpacity 
-                style={[styles.saveButton, isSaving && styles.disabledButton]} 
+                style={[styles.saveButton, isLoading && styles.disabledButton]} 
                 onPress={handleSave}
-                disabled={isSaving}
+                disabled={isLoading}
               >
-                {isSaving ? (
+                {isLoading ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <Text style={styles.saveButtonText}>Save Changes</Text>
+                  <Text style={styles.saveButtonText}>Save Food</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -531,8 +488,8 @@ export const FoodEditScreen: React.FC<FoodEditScreenProps> = ({ food, onClose, o
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
     </Modal>
-  )
-}
+  );
+};
 
 const styles = StyleSheet.create({
   centeredView: {
@@ -544,32 +501,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#000000",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    marginTop: height * 0.05,
+    marginTop: height * 0.0625,
   },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "#2E2E2E",
-    backgroundColor: "#000000",
-    width: "100%",
-    zIndex: 1,
+  headerCustomStyle: {
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-  },
-  headerTitle: {
-    color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "600",
-  },
-  backButton: {
-    padding: 5,
-  },
-  favoriteButton: {
-    padding: 5,
   },
   scrollView: {
     flex: 1,
@@ -709,13 +645,12 @@ const styles = StyleSheet.create({
     right: 0,
   },
   saveButton: {
-    flex: 2,
+    flex: 1,
     backgroundColor: "#45A557",
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
-    marginLeft: 10,
   },
   disabledButton: {
     backgroundColor: "#2E2E2E",
@@ -726,21 +661,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
-  deleteButton: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 12,
-    backgroundColor: "rgba(255, 59, 48, 0.1)",
-    borderRadius: 8,
-  },
-  deleteButtonText: {
-    color: "#FF3B30",
-    fontSize: 16,
-    fontWeight: "500",
-    marginLeft: 5,
-  },
-})
+});
 
-export default FoodEditScreen; 
+export default AddCustomFoodScreen; 

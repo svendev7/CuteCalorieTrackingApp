@@ -24,7 +24,7 @@ interface SavedMealsScreenProps {
   onSelectMeal: (meal: SavedMeal) => void
 }
 
-export const SavedMealsScreen: React.FC<SavedMealsScreenProps> = ({ onClose, onSelectMeal }) => {
+const SavedMealsScreen: React.FC<SavedMealsScreenProps> = ({ onClose, onSelectMeal }) => {
   const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -330,3 +330,5 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 })
+
+export default SavedMealsScreen;

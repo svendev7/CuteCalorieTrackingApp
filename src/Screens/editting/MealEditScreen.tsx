@@ -28,7 +28,7 @@ interface MealEditScreenProps {
   visible: boolean
 }
 
-export const MealEditScreen: React.FC<MealEditScreenProps> = ({ meal, onClose, onSave, onDelete, visible }) => {
+const MealEditScreen: React.FC<MealEditScreenProps> = ({ meal, onClose, onSave, onDelete, visible }) => {
   const [editedMeal, setEditedMeal] = useState<Meal>({ ...meal })
   const [inputValues, setInputValues] = useState({
     protein: meal.protein.toString(),
@@ -307,7 +307,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#000000",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    marginTop: height * 0.05,
+    marginTop: height * 0.0625,
   },
   header: {
     flexDirection: "row",
@@ -457,3 +457,5 @@ const styles = StyleSheet.create({
     marginLeft: 5,
   },
 })
+
+export default MealEditScreen;

@@ -9,11 +9,11 @@ import OnboardingNavigator from "./Screens/onboarding/OnboardingNavigator"
 import { useAuth } from "./hooks/useAuth"
 import { db, auth } from "./config/firebase"
 import { doc, getDoc, setDoc } from "firebase/firestore"
-import AddMealLogScreen from "./Screens/logging/AddMealLogScreen"
-import AddCustomFoodScreen from "./Screens/logging/AddCustomFoodScreen"
-import CustomMealReviewScreen from "./Screens/meals/CustomMealReviewScreen"
-import { SavedMealsScreen } from "./Screens/meals/SavedMealsScreen"
-import AddFoodOptionsScreen from "./Screens/logging/AddFoodOptionsScreen"
+import SavedFoodsScreen from "./Screens/logging/SavedFoodsScreen"
+import AddCustomFoodScreen from "./Screens/logging/addFood/AddCustomFoodScreen"
+import MealReviewScreen from "./Screens/logging/cart/MealReviewScreen"
+import SavedMealsScreen from "./Screens/logging/SavedMealsScreen"
+import AddFoodOptionsScreen from "./Screens/logging/addFood/AddFoodOptionsScreen"
 import Toast from "react-native-toast-message"
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { forceResetAllCartItems } from "./services/mealService"
@@ -398,7 +398,7 @@ export default function App() {
             </Animated.View>
 
             <Animated.View style={[styles.screenContainer, { transform: [{ translateX: addMealTranslate }] }]}>
-              <AddMealLogScreen
+              <SavedFoodsScreen
                 navigation={{
                   navigate: (screen, params) => {
                     if (screen === "AddFoodOptions") {
@@ -442,7 +442,7 @@ export default function App() {
 
             {showCustomMealReviewScreen && (
               <Animated.View style={[styles.fullScreenModal, { transform: [{ translateX: mealReviewTranslate }] }]}>
-                <CustomMealReviewScreen
+                <MealReviewScreen
                   navigation={{
                     navigate: () => {},
                     goBack: handleCloseMealReview,

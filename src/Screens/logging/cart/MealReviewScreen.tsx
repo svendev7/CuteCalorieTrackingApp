@@ -24,18 +24,19 @@ import {
 } from "react-native"
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons"
-import { auth, db } from "../../config/firebase"
-import { addMeal, clearAllCartItems, forceResetAllCartItems, Meal, FoodItem as MealServiceFoodItem } from "../../services/mealService"
-import { generateMealName } from "../../services/aiService"
+import { auth, db } from "../../../config/firebase"
+import { addMeal, clearAllCartItems, forceResetAllCartItems, Meal, FoodItem as MealServiceFoodItem } from "../../../services/mealService"
+import { generateMealName } from "../../../services/aiService"
 import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore"
 import Toast from 'react-native-toast-message'
 import * as ImagePicker from 'expo-image-picker'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useCart, CartItem } from "../../context/CartContext"
+import { useCart, CartItem } from "../../../context/CartContext"
+import Header from "../../../components/header/Header"
 
 const { width, height } = Dimensions.get("window")
 
-interface CustomMealReviewScreenProps {
+interface MealReviewScreenProps {
   navigation: any
   route: any
 }
@@ -64,7 +65,7 @@ const SuccessPopup = ({ visible, message, onDismiss }) => {
   ) : null;
 };
 
-export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ navigation, route }) => {
+const MealReviewScreen: React.FC<MealReviewScreenProps> = ({ navigation, route }) => {
   // Use Cart Context
   const { cartItems, itemCount, updateQuantity, removeFromCart, clearCart: contextClearCart, totalMacros: contextTotalMacros } = useCart();
   
@@ -642,13 +643,11 @@ export const CustomMealReviewScreen: React.FC<CustomMealReviewScreenProps> = ({ 
           onDismiss={() => setShowSuccessPopup(false)}
         />
         
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#EDEDED" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Review Meal</Text>
-          <View style={{ width: 40 }} />
-        </View>
+        <Header
+          title="Review Meal"
+          onBack={() => navigation.goBack()}
+          containerStyle={styles.headerContainer}
+        />
 
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
           <View style={styles.formSection}>
@@ -905,6 +904,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#2E2E2E",
     width: "100%",
+  },
+  headerContainer: {
+    backgroundColor: '#000000',
+    borderBottomWidth: 1,
+    borderBottomColor: '#2E2E2E',
   },
   backButton: {
     padding: 5,
@@ -1508,4 +1512,4 @@ const styles = StyleSheet.create({
   },
 })
 
-export default CustomMealReviewScreen
+export default MealReviewScreen
