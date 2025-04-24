@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react"
 import { View, Text, TouchableOpacity, FlatList, StyleSheet, Dimensions, Modal, Image, ActivityIndicator } from "react-native"
 import { MaterialCommunityIcons } from "@expo/vector-icons"
 import { auth } from "../../config/firebase"
-import { getSavedMealsByUserId, deleteMeal, Meal } from "../../services/mealService"
+import { getSavedMealsByUserId, deleteMeal, Meal, updateMeal } from "../../services/mealService"
 
 const { width, height } = Dimensions.get("window")
 
@@ -105,6 +105,13 @@ const SavedMealsScreen: React.FC<SavedMealsScreenProps> = ({ onClose, onSelectMe
     }
   }
 
+  const handleEditMeal = (meal: SavedMeal) => {
+    // You can implement meal editing functionality here
+    // For now, just show an alert that editing is not yet implemented
+    console.log("Edit meal:", meal);
+    alert("Meal editing will be implemented in a future update");
+  }
+
   if (loading) {
     return (
       <Modal animationType="slide" transparent={true} visible={true} onRequestClose={onClose}>
@@ -170,7 +177,15 @@ const SavedMealsScreen: React.FC<SavedMealsScreenProps> = ({ onClose, onSelectMe
                       style={styles.mealImage} 
                     />
                     <View style={styles.mealInfo}>
-                      <Text style={styles.mealName}>{item.name}</Text>
+                      <View style={styles.mealNameRow}>
+                        <Text style={styles.mealName}>{item.name}</Text>
+                        <TouchableOpacity 
+                          style={styles.moreOptionsButton} 
+                          onPress={() => handleEditMeal(item)}
+                        >
+                          <MaterialCommunityIcons name="pencil-outline" size={18} color="#EDEDED" />
+                        </TouchableOpacity>
+                      </View>
                       <Text style={styles.mealMacros}>
                         {item.protein}g P • {item.carbs}g C • {item.fat}g F
                       </Text>
@@ -328,6 +343,17 @@ const styles = StyleSheet.create({
   retryText: {
     color: "#FFFFFF",
     fontWeight: "600",
+  },
+  mealNameRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  moreOptionsButton: {
+    padding: 4,
+    alignItems: "center",
+    justifyContent: "center",
   },
 })
 

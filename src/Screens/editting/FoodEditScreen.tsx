@@ -24,7 +24,6 @@ import { MaterialCommunityIcons, Ionicons, AntDesign } from "@expo/vector-icons"
 import * as ImagePicker from 'expo-image-picker'
 import { auth } from "../../config/firebase"
 import { updateFavoriteStatus, deleteUserFood, saveCustomFood } from "../../services/mealService"
-import Toast from 'react-native-toast-message'
 import Header from "../../components/header/Header"
 
 const { width, height } = Dimensions.get("window")
@@ -126,21 +125,10 @@ const FoodEditScreen: React.FC<FoodEditScreenProps> = ({ food, onClose, onSave, 
       // Save and close
       await onSave(updatedFood)
       
-      // Show success toast
-      Toast.show({
-        type: 'success',
-        text1: 'Food Updated',
-        text2: 'Your changes have been saved successfully',
-        position: 'bottom',
-      })
+      // Don't show any success toast - parent component will handle feedback
     } catch (error) {
       console.error('Error saving food:', error)
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Failed to save changes',
-        position: 'bottom',
-      })
+      // Don't show error toast - parent component will handle errors
     } finally {
       setSaving(false)
     }
@@ -185,11 +173,7 @@ const FoodEditScreen: React.FC<FoodEditScreenProps> = ({ food, onClose, onSave, 
         "food"
       )
       
-      Toast.show({
-        type: 'success',
-        text1: editedFood.isFavorite ? 'Removed from Favorites' : 'Added to Favorites',
-        position: 'bottom',
-      })
+      // No toast notification
     } catch (error) {
       // Revert on error
       setEditedFood(prev => ({
@@ -197,12 +181,8 @@ const FoodEditScreen: React.FC<FoodEditScreenProps> = ({ food, onClose, onSave, 
         isFavorite: !prev.isFavorite
       }))
       
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Failed to update favorite status',
-        position: 'bottom',
-      })
+      // No toast notification - just log the error
+      console.error("Error updating favorite status:", error)
     }
   }
 
@@ -271,12 +251,12 @@ const FoodEditScreen: React.FC<FoodEditScreenProps> = ({ food, onClose, onSave, 
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync()
       
       if (permissionResult.granted === false) {
-        Toast.show({
-          type: 'error',
-          text1: 'Permission Required',
-          text2: 'You need to grant camera roll permissions to add an image',
-          position: 'bottom',
-        })
+        // Log error but don't show Toast
+        console.error('Permission denied for accessing media library');
+        Alert.alert(
+          "Permission Required",
+          "You need to grant camera roll permissions to add an image"
+        );
         return
       }
       
@@ -295,21 +275,11 @@ const FoodEditScreen: React.FC<FoodEditScreenProps> = ({ food, onClose, onSave, 
           imageUrl: result.assets[0].uri
         }))
         
-        Toast.show({
-          type: 'success',
-          text1: 'Image Added',
-          text2: 'Your image has been added successfully',
-          position: 'bottom',
-        })
+        // Don't show success toast
       }
     } catch (error) {
       console.error('Error picking image:', error)
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Failed to add image',
-        position: 'bottom',
-      })
+      // Don't show error toast
     }
   }
 

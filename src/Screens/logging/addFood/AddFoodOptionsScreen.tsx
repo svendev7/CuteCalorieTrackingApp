@@ -29,6 +29,7 @@ const AddFoodOptionsScreen: React.FC<AddFoodOptionsScreenProps> = ({ navigation 
         // Will implement later
         break;
       case 'customFood':
+        // Just navigate to AddCustomFood without closing this screen
         navigation.navigate('AddCustomFood');
         break;
     }

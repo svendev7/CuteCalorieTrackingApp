@@ -22,7 +22,6 @@ import { MaterialCommunityIcons, Ionicons, AntDesign } from '@expo/vector-icons'
 import * as ImagePicker from 'expo-image-picker';
 import { auth } from '../../../config/firebase';
 import { saveCustomFood } from '../../../services/mealService';
-import Toast from 'react-native-toast-message';
 import Header from '../../../components/header/Header';
 import { NutrientInput } from '../../../components/inputs';
 
@@ -166,12 +165,11 @@ const AddCustomFoodScreen: React.FC<AddCustomFoodScreenProps> = ({ navigation, r
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       
       if (permissionResult.granted === false) {
-        Toast.show({
-          type: 'error',
-          text1: 'Permission Required',
-          text2: 'You need to grant camera roll permissions to add an image',
-          position: 'bottom',
-        });
+        Alert.alert(
+          'Permission Required',
+          'You need to grant camera roll permissions to add an image',
+          [{ text: 'OK', style: 'cancel' }]
+        );
         return;
       }
       
@@ -187,29 +185,25 @@ const AddCustomFoodScreen: React.FC<AddCustomFoodScreenProps> = ({ navigation, r
           ...prev,
           imageUrl: result.assets[0].uri
         }));
-        
-        Toast.show({
-          type: 'success',
-          text1: 'Image Added',
-          text2: 'Your image has been added successfully',
-          position: 'bottom',
-        });
       }
     } catch (error) {
       console.error('Error picking image:', error);
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Failed to add image',
-        position: 'bottom',
-      });
+      Alert.alert(
+        'Error',
+        'Failed to add image',
+        [{ text: 'OK', style: 'cancel' }]
+      );
     }
   };
 
   const handleSave = async () => {
     // Validate inputs
     if (!foodDetails.name.trim()) {
-      Alert.alert('Error', 'Please enter a food name');
+      Alert.alert(
+        'Error',
+        'Please enter a food name',
+        [{ text: 'OK', style: 'cancel' }]
+      );
       return;
     }
     
@@ -248,27 +242,25 @@ const AddCustomFoodScreen: React.FC<AddCustomFoodScreenProps> = ({ navigation, r
       // Save to Firestore
       await saveCustomFood(currentUser.uid, foodData);
       
-      // Show success message in toast and close the screen
-      Toast.show({
-        type: 'success',
-        text1: 'Food Saved',
-        text2: 'Your food has been saved successfully',
-        position: 'bottom',
-      });
-      
-      // Use the correct navigation method
-      if (navigation.goBack) {
-        navigation.goBack();
+      // Navigate back to log items screen and trigger the success message there
+      if (navigation.getParent) {
+        // If this is in a navigator stack
+        navigation.getParent().navigate('addMeal', { 
+          foodChanged: true, 
+          successMessage: `${foodData.name} ${isEditing ? 'updated' : 'added'} successfully!`
+        });
+      } else {
+        // If direct navigation object from App.tsx
+        navigation.save && navigation.save(foodData);
       }
       
     } catch (error) {
       console.error('Error saving food:', error);
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Failed to save food. Please try again.',
-        position: 'bottom',
-      });
+      Alert.alert(
+        'Error',
+        'Failed to save food. Please try again.',
+        [{ text: 'OK', style: 'cancel' }]
+      );
     } finally {
       setIsLoading(false);
     }

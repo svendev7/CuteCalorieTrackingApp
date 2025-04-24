@@ -38,9 +38,9 @@ import {
 import { Swipeable, GestureHandlerRootView } from "react-native-gesture-handler"
 import { useCart } from "../../context/CartContext"
 import FoodEditScreen from "../editting/FoodEditScreen"
-import Toast from 'react-native-toast-message'
 import Header from "../../components/header/Header"
 import SearchBar from "../../components/header/SearchBar"
+import SimpleToast from "../../components/toast/SimpleToast"
 
 const { width, height } = Dimensions.get("window")
 
@@ -58,6 +58,7 @@ interface FoodItem {
   type: "Recent" | "Created" | "Favorites"
   isFavorite: boolean
   servingSize?: number
+  servingUnit?: string
 }
 
 interface MealItem {
@@ -73,6 +74,7 @@ interface MealItem {
   type: "Recent" | "Created" | "Favorites"
   isFavorite: boolean
   servingSize?: number
+  servingUnit?: string
 }
 
 interface SavedFoodsScreenProps {
@@ -92,11 +94,24 @@ const SavedFoodsScreen: React.FC<SavedFoodsScreenProps> = ({ navigation }) => {
   const tabIndicatorPosition = useRef(new Animated.Value(0)).current
   const filterIndicatorPosition = useRef(new Animated.Value(0)).current
   
-  // Add states for Firestore data
-  const [foodItems, setFoodItems] = useState<FoodItem[]>([])
-  const [mealItems, setMealItems] = useState<MealItem[]>([])
+  // Add states for Firestore data - now organizing by filter type
+  const [foodItems, setFoodItems] = useState<{[filter: string]: FoodItem[]}>({
+    Recent: [],
+    Created: [],
+    Favorites: []
+  })
+  const [mealItems, setMealItems] = useState<{[filter: string]: MealItem[]}>({
+    Recent: [],
+    Created: [],
+    Favorites: []
+  })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  
+  // Toast state
+  const [toastVisible, setToastVisible] = useState(false)
+  const [toastMessage, setToastMessage] = useState("")
+  const [toastType, setToastType] = useState<'success' | 'error' | 'info' | 'loading'>('success')
 
   // Add state for tracking favorite items
   const [favoriteItems, setFavoriteItems] = useState<{ [key: string]: boolean }>({})
@@ -108,15 +123,22 @@ const SavedFoodsScreen: React.FC<SavedFoodsScreenProps> = ({ navigation }) => {
   // Add state for food edit screen
   const [showFoodEdit, setShowFoodEdit] = useState(false)
   const [selectedFoodToEdit, setSelectedFoodToEdit] = useState<FoodItem | null>(null)
-
-  // Add haptic feedback function
-  const triggerHapticFeedback = () => {
-    if (Platform.OS === "ios") {
-      // This is a placeholder - in a real app you would use a library like expo-haptics
-      // For example: Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      // You'll need to install expo-haptics or react-native-haptic-feedback
-    }
-  }
+  
+  // Add state for delete confirmation modal
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [itemToDelete, setItemToDelete] = useState<FoodItem | MealItem | null>(null)
+  
+  // Show toast message
+  const showToast = (message: string, type: 'success' | 'error' | 'info' | 'loading' = 'success') => {
+    setToastMessage(message);
+    setToastType(type);
+    setToastVisible(true);
+  };
+  
+  // Hide toast
+  const hideToast = () => {
+    setToastVisible(false);
+  };
 
   // Set up keyboard listeners
   useEffect(() => {
@@ -148,165 +170,167 @@ const SavedFoodsScreen: React.FC<SavedFoodsScreenProps> = ({ navigation }) => {
     }
   }, [])
 
-  // Fetch meals based on active filter
-  useEffect(() => {
-    fetchMeals()
-  }, [activeFilter, activeTab])
-  
-  // Add a navigation focus listener to clear cart state when returning to this screen
+  // Add a navigation focus listener to clear cart state and refresh data when returning to this screen
   useEffect(() => {
     const unsubscribe = navigation.addListener?.('focus', () => {
-      
       // Clear local cart state immediately using Context
       contextClearCart(); // Use context clearCart
       
-      const forceClearAndRefresh = async () => {
+      // Reset cart items in Firebase without showing loading state
+      const forceClearAndRefreshCart = async () => {
         try {
           const currentUser = auth.currentUser;
           if (currentUser) {
             await forceResetAllCartItems(currentUser.uid);
+            
+            // Check for success message explicitly
+            const successMessage = navigation.getParam?.('successMessage');
+            if (successMessage) {
+              console.log("Success message found:", successMessage);
+              showToast(successMessage, 'success');
+              navigation.setParams?.({successMessage: null});
+              return; // Skip the rest if we have a direct success message
+            }
+            
+            // Only reload if a food/meal was added or edited
+            if (navigation.getParam?.('foodChanged') || navigation.getParam?.('mealChanged')) {
+              // Show a loading indicator in the popup instead of full screen
+              showToast("Updating food list...", 'loading');
+              await fetchAllData();
+              
+              // Default messages if no custom message is provided
+              if (navigation.getParam?.('foodChanged')) {
+                showToast("Food successfully saved", 'success');
+              } else if (navigation.getParam?.('mealChanged')) {
+                showToast("Meal successfully saved", 'success');
+              }
+              
+              // Clear the params
+              navigation.setParams?.({foodChanged: false, mealChanged: false});
+            }
           }
         } catch (error) {
-          console.error("Error clearing cart on screen focus:", error);
+          console.error("Error on screen focus:", error);
+          hideToast();
         }
       };
       
-      forceClearAndRefresh();
+      forceClearAndRefreshCart();
     });
+    
+    // Initial data load when the component mounts - show loading only on first mount
+    fetchAllData();
     
     // Clean up the listener on unmount
     return () => {
       if (unsubscribe) {
         unsubscribe.remove?.();
       }
-    };
-  }, [navigation, contextClearCart]); // Added contextClearCart dependency
-  
-  // Add a mechanism to refresh foods when returning from add/edit screens
-  useEffect(() => {
-    // Setup a refresh mechanism when returning from add/edit flows
-    const refreshTimerId = setTimeout(() => {
-      fetchMeals();
-    }, 300); // Small delay to ensure Firebase operation completes
-    
-    return () => clearTimeout(refreshTimerId);
-  }, []);
-
-  // Add smarter refresh when screen becomes active
-  useEffect(() => {
-    // Initial data load when the component mounts
-    fetchMeals();
-    
-    // Set up a listener for the navigation focus event for data refresh
-    const unsubscribe = navigation.addListener?.('focus', () => {
-      fetchMeals();
-    });
-    
-    return () => {
-      if (unsubscribe) {
-        unsubscribe.remove?.();
+      if (toastVisible) {
+        hideToast();
       }
     };
-  }, [navigation]);
+  }, [navigation, contextClearCart]);
 
-  const fetchMeals = async () => {
+  // We don't need to fetch data when filter/tab changes anymore, as we pre-load all data
+  
+  // New function to fetch all data at once
+  const fetchAllData = async () => {
     try {
-      setLoading(true)
-      const currentUser = auth.currentUser
+      setLoading(true);
+      const currentUser = auth.currentUser;
       
       if (!currentUser) {
-        throw new Error("User not authenticated")
+        throw new Error("User not authenticated");
       }
       
-      // Fetch meals based on active filter
-      let meals = []
-      let foods = []
+      // Fetch all foods for different filters in parallel
+      const [recentFoods, favoriteFoods, createdFoods, recentMeals, favoriteMeals, savedMeals] = await Promise.all([
+        getUserFoodsByType(currentUser.uid, "recent"),
+        getUserFoodsByType(currentUser.uid, "favorite"),
+        getUserFoodsByType(currentUser.uid, "created"),
+        getRecentMealsByUserId(currentUser.uid),
+        getFavoriteMealsByUserId(currentUser.uid),
+        getSavedMealsByUserId(currentUser.uid)
+      ]);
       
-      switch (activeFilter) {
-        case "Recent":
-          meals = await getRecentMealsByUserId(currentUser.uid)
-          foods = await getUserFoodsByType(currentUser.uid, "recent")
-          break
-        case "Favorites":
-          meals = await getFavoriteMealsByUserId(currentUser.uid)
-          foods = await getUserFoodsByType(currentUser.uid, "favorite")
-          break
-        case "Created":
-          meals = await getSavedMealsByUserId(currentUser.uid)
-          foods = await getUserFoodsByType(currentUser.uid, "created")
-          break
-        default:
-          meals = await getRecentMealsByUserId(currentUser.uid)
-          foods = await getUserFoodsByType(currentUser.uid, "recent")
-      }
+      // Transform and set meals in state organized by filter
+      const transformedMeals = {
+        Recent: recentMeals.map(transformMeal('Recent')),
+        Favorites: favoriteMeals.map(transformMeal('Favorites')),
+        Created: savedMeals.map(transformMeal('Created'))
+      };
       
-      // Transform meals to the format expected by the UI
-      const transformedMeals = meals.map((meal) => ({
-        id: meal.id,
-        name: meal.mealName,
-        calories: meal.calories,
-        protein: meal.protein,
-        carbs: meal.carbs,
-        fat: meal.fat,
-        sodium: meal.sodium || 0,
-        sugar: meal.sugar || 0,
-        fibers: meal.fibers || 0,
-        type: activeFilter as "Recent" | "Created" | "Favorites",
-        isFavorite: meal.isFavorite || false,
-        servingSize: meal.servingSize,
-      }))
+      // Transform and set foods in state organized by filter
+      const transformedFoods = {
+        Recent: recentFoods.map(transformFood('Recent')),
+        Favorites: favoriteFoods.map(transformFood('Favorites')),
+        Created: createdFoods.map(transformFood('Created'))
+      };
       
-      // Transform foods to the format expected by the UI
-      const transformedFoods = foods.map((food) => ({
-        id: food.id,
-        name: food.name,
-        calories: food.calories,
-        protein: food.protein,
-        carbs: food.carbs,
-        fat: food.fat,
-        sodium: food.sodium || 0,
-        sugar: food.sugar || 0,
-        fibers: food.fibers || 0,
-        type: activeFilter as "Recent" | "Created" | "Favorites",
-        isFavorite: food.isFavorite || false,
-        servingSize: food.servingSize,
-      }))
-
-      // Also update our favorites state to reflect backend state
-      const newFavorites = {}
+      // Update favorites state
+      const newFavorites = {};
       
       // Add favorites from meals
-      meals.forEach(meal => {
+      [...recentMeals, ...favoriteMeals, ...savedMeals].forEach(meal => {
         if (meal.isFavorite) {
-          newFavorites[meal.id] = true
+          newFavorites[meal.id] = true;
         }
-      })
+      });
       
       // Add favorites from foods
-      foods.forEach(food => {
+      [...recentFoods, ...favoriteFoods, ...createdFoods].forEach(food => {
         if (food.isFavorite) {
-          newFavorites[food.id] = true
+          newFavorites[food.id] = true;
         }
-      })
+      });
       
       // Update our local state
-      setFavoriteItems(newFavorites)
-
-      if (activeTab === "Meals") {
-        setMealItems(transformedMeals)
-      } else {
-        setFoodItems(transformedFoods)
-      }
-
-      setError(null)
+      setFavoriteItems(newFavorites);
+      setMealItems(transformedMeals);
+      setFoodItems(transformedFoods);
+      setError(null);
     } catch (err) {
-      console.error("Error fetching meals and foods:", err)
-      setError("Failed to load items")
+      console.error("Error fetching meals and foods:", err);
+      setError("Failed to load items");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
-
+  };
+  
+  // Helper functions to transform meals and foods
+  const transformMeal = (filter: "Recent" | "Created" | "Favorites") => (meal: any): MealItem => ({
+    id: meal.id,
+    name: meal.mealName,
+    calories: meal.calories,
+    protein: meal.protein,
+    carbs: meal.carbs,
+    fat: meal.fat,
+    sodium: meal.sodium || 0,
+    sugar: meal.sugar || 0,
+    fibers: meal.fibers || 0,
+    type: filter,
+    isFavorite: meal.isFavorite || false,
+    servingSize: meal.servingSize,
+    servingUnit: meal.servingUnit || 'g',
+  });
+  
+  const transformFood = (filter: "Recent" | "Created" | "Favorites") => (food: any): FoodItem => ({
+    id: food.id,
+    name: food.name,
+    calories: food.calories,
+    protein: food.protein,
+    carbs: food.carbs,
+    fat: food.fat,
+    sodium: food.sodium || 0,
+    sugar: food.sugar || 0,
+    fibers: food.fibers || 0,
+    type: filter,
+    isFavorite: food.isFavorite || false,
+    servingSize: food.servingSize,
+    servingUnit: food.servingUnit || 'g',
+  });
+  
   const handleTabPress = (tabName: string) => {
     // Animate tab indicator
     Animated.spring(tabIndicatorPosition, {
@@ -368,6 +392,9 @@ const SavedFoodsScreen: React.FC<SavedFoodsScreenProps> = ({ navigation }) => {
 
     // Add to cart using context function
     addToCart(itemToAdd, itemType); 
+    
+    // Show success message
+    showToast('Item Added to Meal', 'success');
   }
 
   const handleEditItem = (item: FoodItem | MealItem) => {
@@ -538,7 +565,7 @@ const SavedFoodsScreen: React.FC<SavedFoodsScreenProps> = ({ navigation }) => {
   // Function to handle favoriting an item
   const handleFavoriteItem = async (itemId: string) => {
     // Get current item (either food or meal)
-    const item = [...foodItems, ...mealItems].find(item => item.id === itemId)
+    const item = [...foodItems.Recent, ...foodItems.Created, ...foodItems.Favorites, ...mealItems.Recent, ...mealItems.Created, ...mealItems.Favorites].find(item => item.id === itemId)
     
     if (!item) {
       console.error("Could not find item to favorite:", itemId)
@@ -586,68 +613,113 @@ const SavedFoodsScreen: React.FC<SavedFoodsScreenProps> = ({ navigation }) => {
 
   // Function to confirm deletion
   const confirmDeleteItem = (item: FoodItem | MealItem) => {
-    Alert.alert(
-      "Delete Item",
-      `Are you sure you want to delete ${item.name}?`,
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-          onPress: () => {
-            // Ensure swipeable closes if cancelled
-             if (swipeableRefs.current[item.id]) {
-               swipeableRefs.current[item.id]?.close();
-             }
-          }
-        },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              const currentUser = auth.currentUser;
-              if (!currentUser) {
-                Alert.alert("Error", "You must be logged in to delete items");
-                return;
-              }
-              
-              // Remove from local UI state immediately
-              if (activeTab === "Foods") {
-                setFoodItems(prev => prev.filter(food => food.id !== item.id));
-              } else {
-                setMealItems(prev => prev.filter(meal => meal.id !== item.id));
-              }
-              
-              // Find corresponding cart item(s) by originalItemId and remove from context cart
-              const cartItemsToRemove = cartItems.filter(ci => ci.originalItemId === item.id);
-              cartItemsToRemove.forEach(ci => removeFromCart(ci.id)); // Use context remove
+    // Set the item to delete and show the confirmation modal
+    setItemToDelete(item)
+    setShowDeleteConfirm(true)
+    
+    // Close the swipeable
+    if (swipeableRefs.current[item.id]) {
+      swipeableRefs.current[item.id]?.close()
+    }
+  }
+  
+  // Function to handle actual deletion after confirmation
+  const handleDeleteConfirmed = async () => {
+    if (!itemToDelete) return
+    
+    try {
+      const currentUser = auth.currentUser
+      if (!currentUser) {
+        showToast("Error: You must be logged in to delete items", 'error')
+        return
+      }
+      
+      // Show deleting feedback
+      showToast("Deleting...", 'loading')
+      
+      // Close the confirmation modal
+      setShowDeleteConfirm(false)
+      
+      // Remove from local UI state immediately
+      if (activeTab === "Foods") {
+        setFoodItems(prev => ({
+          ...prev,
+          Recent: prev.Recent.filter(f => f.id !== itemToDelete.id),
+          Created: prev.Created.filter(f => f.id !== itemToDelete.id),
+          Favorites: prev.Favorites.filter(f => f.id !== itemToDelete.id)
+        }))
+      } else {
+        setMealItems(prev => ({
+          ...prev,
+          Recent: prev.Recent.filter(f => f.id !== itemToDelete.id),
+          Created: prev.Created.filter(f => f.id !== itemToDelete.id),
+          Favorites: prev.Favorites.filter(f => f.id !== itemToDelete.id)
+        }))
+      }
+      
+      // Find corresponding cart item(s) by originalItemId and remove from context cart
+      const cartItemsToRemove = cartItems.filter(ci => ci.originalItemId === itemToDelete.id)
+      cartItemsToRemove.forEach(ci => removeFromCart(ci.id)) // Use context remove
 
-              // Delete from Firestore based on current tab
-              if (activeTab === "Foods") {
-                // No need to update cart status first, just delete
-                await deleteUserFood(currentUser.uid, item.id, 'food');
-              } else {
-                await deleteMeal(item.id);
-              }
-              
-            } catch (error) {
-              console.error("Error deleting item:", error)
-              Alert.alert(
-                "Error",
-                "Failed to delete item. Please try again.",
-                [{ text: "OK" }]
-              )
-              // Optionally re-fetch data on error to sync UI
-              fetchMeals(); 
-            } finally {
-               // Close the swipeable after action
-               if (swipeableRefs.current[item.id]) {
-                 swipeableRefs.current[item.id]?.close();
-               }
-            }
-          },
-        },
-      ]
+      // Delete from Firestore based on current tab
+      if (activeTab === "Foods") {
+        // No need to update cart status first, just delete
+        await deleteUserFood(currentUser.uid, itemToDelete.id, 'food')
+      } else {
+        await deleteMeal(itemToDelete.id)
+      }
+      
+      // Show success message
+      showToast("Item deleted successfully", 'success')
+      
+    } catch (error) {
+      console.error("Error deleting item:", error)
+      showToast("Failed to delete item", 'error')
+      // Optionally re-fetch data on error to sync UI
+      fetchAllData()
+    } finally {
+      setItemToDelete(null)
+    }
+  }
+  
+  // Render custom delete confirmation modal
+  const renderDeleteConfirmModal = () => {
+    if (!itemToDelete) return null
+    
+    return (
+      <Modal
+        transparent={true}
+        visible={showDeleteConfirm}
+        animationType="fade"
+        onRequestClose={() => setShowDeleteConfirm(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setShowDeleteConfirm(false)}>
+          <View style={styles.confirmModalOverlay}>
+            <TouchableWithoutFeedback onPress={(e: any) => e.stopPropagation()}>
+              <View style={styles.confirmModalContainer}>
+                <Text style={styles.confirmModalTitle}>Delete Item</Text>
+                <Text style={styles.confirmModalMessage}>
+                  Are you sure you want to delete "{itemToDelete.name}"?
+                </Text>
+                <View style={styles.confirmModalButtons}>
+                  <TouchableOpacity 
+                    style={styles.confirmModalCancelButton}
+                    onPress={() => setShowDeleteConfirm(false)}
+                  >
+                    <Text style={styles.confirmModalCancelText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.confirmModalDeleteButton}
+                    onPress={handleDeleteConfirmed}
+                  >
+                    <Text style={styles.confirmModalDeleteText}>Delete</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     )
   }
 
@@ -742,7 +814,7 @@ const SavedFoodsScreen: React.FC<SavedFoodsScreenProps> = ({ navigation }) => {
   }
 
   const renderContent = () => {
-    if (loading) {
+    if (loading && (foodItems.Recent.length === 0 && mealItems.Recent.length === 0)) {
       return (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#3E92CC" />
@@ -753,27 +825,64 @@ const SavedFoodsScreen: React.FC<SavedFoodsScreenProps> = ({ navigation }) => {
     
     if (error) {
       return (
-        <View style={styles.errorContainer}>
+        <View style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          paddingTop: 40,
+        }}>
           <MaterialCommunityIcons name="alert-circle" size={40} color="#FF3B30" />
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity onPress={fetchMeals} style={styles.retryButton}>
-            <Text style={styles.retryText}>Retry</Text>
+          <Text style={{
+            color: "#FF3B30",
+            fontSize: 16,
+            textAlign: "center",
+            marginVertical: 10,
+            paddingHorizontal: 20,
+          }}>{error}</Text>
+          <TouchableOpacity onPress={fetchAllData} style={{
+            backgroundColor: "#3E92CC",
+            paddingVertical: 8,
+            paddingHorizontal: 16,
+            borderRadius: 8,
+            marginTop: 10,
+          }}>
+            <Text style={{
+              color: "#FFFFFF",
+              fontWeight: "600",
+            }}>Retry</Text>
           </TouchableOpacity>
         </View>
       )
     }
 
-    const itemsToDisplay: (FoodItem | MealItem)[] = activeTab === "Foods" ? foodItems : mealItems
+    // Use the correct items based on active tab and filter
+    const itemsToDisplay: (FoodItem | MealItem)[] = activeTab === "Foods" 
+      ? foodItems[activeFilter] || []
+      : mealItems[activeFilter] || [];
+
     const filteredItems = itemsToDisplay.filter((item) => {
       const nameMatch = item.name.toLowerCase().includes(searchText.toLowerCase())
-      const typeMatch = item.type === activeFilter
-      return nameMatch && typeMatch
+      return nameMatch
     })
+
+    if (filteredItems.length === 0) {
+      return (
+        <View style={styles.emptyContainer}>
+          <MaterialCommunityIcons name={activeTab === "Foods" ? "food-off" : "food-variant-off"} size={60} color="#A0A0A0" />
+          <Text style={styles.emptyText}>No {activeTab.toLowerCase()} found</Text>
+          {activeTab === "Foods" && activeFilter === "Created" && (
+            <TouchableOpacity style={styles.addEmptyButton} onPress={handleAddFoodPress}>
+              <Text style={styles.addEmptyButtonText}>Add Custom Food</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )
+    }
 
     return filteredItems.map((item) => {
       // Determine if this is a food or meal item
       const isFood = activeTab === "Foods"
-
+      
       return (
         <Swipeable
           key={`swipeable-${item.id}`}
@@ -814,6 +923,14 @@ const SavedFoodsScreen: React.FC<SavedFoodsScreenProps> = ({ navigation }) => {
                 </Text>
                 {favoriteItems[item.id] && (
                   <AntDesign name="star" size={16} color="#FFD700" style={styles.favoriteIcon} />
+                )}
+                {isFood && (
+                  <TouchableOpacity 
+                    style={styles.moreOptionsButton} 
+                    onPress={() => handleEditItem(item)}
+                  >
+                    <MaterialCommunityIcons name="pencil-outline" size={18} color="#EDEDED" />
+                  </TouchableOpacity>
                 )}
               </View>
 
@@ -876,16 +993,11 @@ const SavedFoodsScreen: React.FC<SavedFoodsScreenProps> = ({ navigation }) => {
               
                 <View style={styles.footerRow}>
                   <Text style={styles.itemCaloriesValue}>{formatMacro(item.calories, true)} Calories</Text>
-                  <Text style={styles.perUnitText}>per {item.servingSize || 100}g</Text>
+                  <Text style={styles.perUnitText}>per {item.servingSize || 100} {item.servingUnit || 'g'}</Text>
                 </View>
               </View>
             </View>
             <View style={styles.itemActions}>
-              {isFood && (
-                <TouchableOpacity style={styles.editButton} onPress={() => handleEditItem(item)}>
-                  <MaterialCommunityIcons name="pencil" size={18} color="#EDEDED" />
-                </TouchableOpacity>
-              )}
               <TouchableOpacity style={styles.addButton} onPress={() => handleFoodPress(item)}>
                 <MaterialCommunityIcons name="plus" size={24} color="#FFFFFF" />
               </TouchableOpacity>
@@ -913,7 +1025,7 @@ const SavedFoodsScreen: React.FC<SavedFoodsScreenProps> = ({ navigation }) => {
       if (currentUser) {
         await forceResetAllCartItems(currentUser.uid);
         // Optionally re-fetch data after clearing backend state
-        // fetchMeals(); // Consider if needed - focus listener might handle this
+        // fetchAllData(); // Consider if needed - focus listener might handle this
       }
     } catch (error) {
       console.error("Error clearing cart in Firebase:", error);
@@ -932,7 +1044,7 @@ const SavedFoodsScreen: React.FC<SavedFoodsScreenProps> = ({ navigation }) => {
     navigation.navigate("CustomMealReview") 
   }
 
-  const handleCartPress = () => {
+  const handleMealPress = () => {
     // Use itemCount from context
     if (itemCount === 0) { 
       return // Don't navigate if cart is empty
@@ -945,11 +1057,14 @@ const SavedFoodsScreen: React.FC<SavedFoodsScreenProps> = ({ navigation }) => {
   // Add this state at the top with other states
   const [searchBarSticky, setSearchBarSticky] = useState(false);
 
-  // Add handleSaveFood function
+  // Replace handleSaveFood function
   const handleSaveFood = async (updatedFood: FoodItem) => {
     try {
       const currentUser = auth.currentUser;
       if (!currentUser) throw new Error("User not authenticated");
+      
+      // Show saving feedback
+      showToast("Saving food...", 'loading');
       
       // Save to Firebase using saveCustomFood function
       await saveCustomFood(currentUser.uid, {
@@ -962,27 +1077,62 @@ const SavedFoodsScreen: React.FC<SavedFoodsScreenProps> = ({ navigation }) => {
       // Close the edit screen
       setShowFoodEdit(false);
       
-      // Refresh the foods list
-      fetchMeals();
-
-      // Show success message
-      Toast.show({
-        type: 'success',
-        text1: 'Food Updated',
-        text2: 'Changes have been saved',
-        position: 'bottom',
-      });
+      // Update both Created and Favorites filters if applicable
+      const newFoodItems = {...foodItems};
+      
+      // Add or update in Created list
+      const createdIndex = newFoodItems.Created.findIndex(f => f.id === updatedFood.id);
+      if (createdIndex >= 0) {
+        newFoodItems.Created[createdIndex] = {...updatedFood, type: "Created"};
+      } else {
+        newFoodItems.Created.push({...updatedFood, type: "Created"});
+      }
+      
+      // Update in Favorites list if it's a favorite
+      if (updatedFood.isFavorite) {
+        const favIndex = newFoodItems.Favorites.findIndex(f => f.id === updatedFood.id);
+        if (favIndex >= 0) {
+          newFoodItems.Favorites[favIndex] = {...updatedFood, type: "Favorites"};
+        } else {
+          newFoodItems.Favorites.push({...updatedFood, type: "Favorites"});
+        }
+      } else {
+        // Remove from favorites if it was un-favorited
+        newFoodItems.Favorites = newFoodItems.Favorites.filter(f => f.id !== updatedFood.id);
+      }
+      
+      // Update Recent list if it exists there
+      const recentIndex = newFoodItems.Recent.findIndex(f => f.id === updatedFood.id);
+      if (recentIndex >= 0) {
+        newFoodItems.Recent[recentIndex] = {...updatedFood, type: "Recent"};
+      }
+      
+      // Update state
+      setFoodItems(newFoodItems);
+      
+      // Update favorite state
+      setFavoriteItems(prev => ({
+        ...prev,
+        [updatedFood.id]: updatedFood.isFavorite
+      }));
+      
+      // Show success popup
+      showToast('Food Successfully Updated', 'success');
     } catch (error) {
       console.error("Error saving food:", error);
+      hideToast();
       Alert.alert("Error", "Failed to save changes to food");
     }
   };
 
-  // Add handleDeleteFood function
+  // Replace handleDeleteFood function
   const handleDeleteFood = async (foodId: string) => {
     try {
       const currentUser = auth.currentUser;
       if (!currentUser) throw new Error("User not authenticated");
+      
+      // Show deleting feedback
+      showToast("Deleting food...", 'loading');
       
       // Delete from Firebase
       await deleteUserFood(currentUser.uid, foodId, "food");
@@ -990,18 +1140,26 @@ const SavedFoodsScreen: React.FC<SavedFoodsScreenProps> = ({ navigation }) => {
       // Close the edit screen
       setShowFoodEdit(false);
       
-      // Refresh the foods list
-      fetchMeals();
+      // Remove from all filter lists
+      setFoodItems(prev => ({
+        ...prev,
+        Recent: prev.Recent.filter(f => f.id !== foodId),
+        Created: prev.Created.filter(f => f.id !== foodId),
+        Favorites: prev.Favorites.filter(f => f.id !== foodId)
+      }));
+      
+      // Remove from favorites
+      setFavoriteItems(prev => {
+        const newFavorites = {...prev};
+        delete newFavorites[foodId];
+        return newFavorites;
+      });
       
       // Show success message
-      Toast.show({
-        type: 'success',
-        text1: 'Food Deleted',
-        text2: 'The food has been removed',
-        position: 'bottom',
-      });
+      showToast('Food Deleted', 'success');
     } catch (error) {
       console.error("Error deleting food:", error);
+      hideToast();
       Alert.alert("Error", "Failed to delete food");
     }
   };
@@ -1010,7 +1168,16 @@ const SavedFoodsScreen: React.FC<SavedFoodsScreenProps> = ({ navigation }) => {
     <SafeAreaView style={styles.safeArea}>
       <GestureHandlerRootView style={{ flex: 1 }}>
       <View style={styles.container}>
-          {/* Add loading overlay */}
+          {/* Swipeable Toast */}
+          <SimpleToast
+            visible={toastVisible}
+            message={toastMessage}
+            type={toastType}
+            onDismiss={hideToast}
+            duration={3000}
+          />
+          
+          {/* Single item logging indicator */}
           {isLoggingSingleItem && (
             <View style={styles.loadingOverlay}>
               <View style={styles.loadingContainer}>
@@ -1026,15 +1193,15 @@ const SavedFoodsScreen: React.FC<SavedFoodsScreenProps> = ({ navigation }) => {
           onBack={() => navigation.goBack()}
           rightIcon={
             <View>
-              <Ionicons name="cart-outline" size={24} color="#FFFFFF" />
+              <MaterialCommunityIcons name="silverware-fork-knife" size={24} color="#FFFFFF" />
               {itemCount > 0 && (
-                <View style={styles.cartBadge}>
-                  <Text style={styles.cartBadgeText}>{itemCount}</Text>
+                <View style={styles.mealBadge}>
+                  <Text style={styles.mealBadgeText}>{itemCount}</Text>
                 </View>
               )}
             </View>
           }
-          rightIconAction={handleCartPress}
+          rightIconAction={handleMealPress}
           showSearch={!searchBarSticky}
           searchComponent={
             <SearchBar
@@ -1154,6 +1321,9 @@ const SavedFoodsScreen: React.FC<SavedFoodsScreenProps> = ({ navigation }) => {
             visible={showFoodEdit}
           />
         )}
+
+        {/* Delete Confirmation Modal */}
+        {renderDeleteConfirmModal()}
       </View>
       </GestureHandlerRootView>
     </SafeAreaView>
@@ -1169,7 +1339,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#000000",
   },
-  cartBadge: {
+  mealBadge: {
     position: "absolute",
     right: -5,
     top: -5,
@@ -1180,7 +1350,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  cartBadgeText: {
+  mealBadgeText: {
     color: "#FFFFFF",
     fontSize: 12,
     fontWeight: "bold",
@@ -1540,59 +1710,143 @@ const styles = StyleSheet.create({
   sodiumColor: { color: "#FF9500" },
   sugarColor: { color: "#D4C19C" },
   fiberColor: { color: "#5AC8FA" },
-  loadingContainer: {
-    flex: 1,
+  loadingOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    zIndex: 100,
     justifyContent: "center",
     alignItems: "center",
-    paddingTop: 40,
+  },
+  loadingContainer: {
     backgroundColor: "#1C1C1E",
     padding: 20,
     borderRadius: 12,
+    alignItems: "center",
+    minWidth: width * 0.7,
     shadowColor: "#000",
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 4,
     },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowOpacity: 0.3,
+    shadowRadius: 4.65,
+    elevation: 8,
   },
   loadingText: {
     color: "#EDEDED",
     fontSize: 16,
     marginTop: 12,
     fontWeight: "500",
+    textAlign: "center",
   },
-  errorContainer: {
+  emptyContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     paddingTop: 40,
   },
-  errorText: {
-    color: "#FF3B30",
+  emptyText: {
+    color: "#EDEDED",
     fontSize: 16,
+    marginTop: 12,
+    fontWeight: "500",
     textAlign: "center",
-    marginVertical: 10,
+  },
+  addEmptyButton: {
+    backgroundColor: "#45A557",
+    paddingVertical: 10,
     paddingHorizontal: 20,
-  },
-  retryButton: {
-    backgroundColor: "#3E92CC",
-    paddingVertical: 8,
-    paddingHorizontal: 16,
     borderRadius: 8,
-    marginTop: 10,
+    marginTop: 20,
   },
-  retryText: {
+  addEmptyButtonText: {
     color: "#FFFFFF",
+    fontSize: 14,
     fontWeight: "600",
   },
-  nameRow: {
+  confirmModalOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+    width: "100%",
+    height: "100%",
+    zIndex: 150,
+  },
+  confirmModalContainer: {
+    backgroundColor: "#1C1C1E",
+    padding: 20,
+    borderRadius: 12,
+    width: width * 0.8,
+    maxWidth: 350,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4.65,
+    elevation: 8,
+  },
+  confirmModalTitle: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    fontWeight: "600",
+    marginBottom: 10,
+  },
+  confirmModalMessage: {
+    color: "#EDEDED",
+    fontSize: 16,
+    marginBottom: 20,
+    textAlign: "center",
+  },
+  confirmModalButtons: {
     flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 10,
+  },
+  confirmModalCancelButton: {
+    backgroundColor: "#2E2E2E",
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    flex: 1,
+    marginRight: 10,
     alignItems: "center",
   },
-  favoriteIcon: {
-    marginLeft: 6,
+  confirmModalCancelText: {
+    color: "#EDEDED",
+    fontWeight: "600",
+    fontSize: 16,
+  },
+  confirmModalDeleteButton: {
+    backgroundColor: "#FF3B30",
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    flex: 1,
+    alignItems: "center",
+  },
+  confirmModalDeleteText: {
+    color: "#FFFFFF",
+    fontWeight: "600",
+    fontSize: 16,
+  },
+  clearButton: {
+    padding: 5,
+  },
+  itemActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
   },
   leftAction: {
     width: width * 0.2,
@@ -1632,34 +1886,45 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 3,
   },
-  loadingOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0, 0, 0, 0.7)",
-    zIndex: 100,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  clearButton: {
-    padding: 5,
-  },
-  itemActions: {
+  nameRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "flex-end",
+    justifyContent: "space-between",
   },
-  editButton: {
-    padding: 8,
-    marginRight: 8,
+  favoriteIcon: {
+    marginLeft: 3,
+    alignSelf: "center",
+    marginTop: -5,
+  },
+  moreOptionsButton: {
+    marginLeft: 'auto',
+    padding: 4,
     alignItems: "center",
     justifyContent: "center",
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: "#2C2C2E",
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingTop: 40,
+  },
+  errorText: {
+    color: "#FF3B30",
+    fontSize: 16,
+    textAlign: "center",
+    marginVertical: 10,
+    paddingHorizontal: 20,
+  },
+  retryButton: {
+    backgroundColor: "#3E92CC",
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginTop: 10,
+  },
+  retryText: {
+    color: "#FFFFFF",
+    fontWeight: "600",
   },
 })
 

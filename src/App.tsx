@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import { View, ImageBackground, StyleSheet, Dimensions, Animated, Text, ActivityIndicator, Alert } from "react-native"
+import { View, ImageBackground, StyleSheet, Dimensions, Animated, Text, ActivityIndicator, Alert, Easing } from "react-native"
 import { HomeScreen } from "./Screens/home/HomeScreen"
 import { SettingsScreen } from "./Screens/settings/SettingsScreen"
 import AnimatedFooter from "./components/footer/AnimatedFooter"
@@ -43,11 +43,13 @@ export default function App() {
   const statsTranslate = useRef(new Animated.Value(width)).current
 
   const addFoodOptionsTranslate = useRef(new Animated.Value(width)).current
-  const addCustomFoodTranslate = useRef(new Animated.Value(width)).current
+  const addCustomFoodTranslate = useRef(new Animated.Value(height)).current
   const mealReviewTranslate = useRef(new Animated.Value(width)).current
   const savedMealsTranslate = useRef(new Animated.Value(width)).current
 
-  const ANIM_DURATION = 300
+  const ANIM_DURATION = 200
+
+  const screenParams = useRef<{[key: string]: any}>({});
 
   useEffect(() => {
     if (
@@ -100,6 +102,7 @@ export default function App() {
         toValue: activeScreen === "home" ? 0 : -width,
         duration: ANIM_DURATION,
         useNativeDriver: true,
+        easing: Easing.inOut(Easing.ease),
       }),
     )
     animations.push(
@@ -107,6 +110,7 @@ export default function App() {
         toValue: activeScreen === "settings" ? 0 : width,
         duration: ANIM_DURATION,
         useNativeDriver: true,
+        easing: Easing.inOut(Easing.ease),
       }),
     )
     animations.push(
@@ -114,6 +118,7 @@ export default function App() {
         toValue: activeScreen === "addMeal" ? 0 : width,
         duration: ANIM_DURATION,
         useNativeDriver: true,
+        easing: Easing.inOut(Easing.ease),
       }),
     )
     animations.push(
@@ -121,6 +126,7 @@ export default function App() {
         toValue: activeScreen === "rocket" ? 0 : width,
         duration: ANIM_DURATION,
         useNativeDriver: true,
+        easing: Easing.inOut(Easing.ease),
       }),
     )
     animations.push(
@@ -128,6 +134,7 @@ export default function App() {
         toValue: activeScreen === "stats" ? 0 : width,
         duration: ANIM_DURATION,
         useNativeDriver: true,
+        easing: Easing.inOut(Easing.ease),
       }),
     )
 
@@ -139,14 +146,16 @@ export default function App() {
       toValue: showAddFoodOptionsScreen ? 0 : width,
       duration: ANIM_DURATION,
       useNativeDriver: true,
+      easing: Easing.inOut(Easing.ease),
     }).start()
   }, [showAddFoodOptionsScreen])
 
   useEffect(() => {
     Animated.timing(addCustomFoodTranslate, {
-      toValue: showAddCustomFoodScreen ? 0 : width,
+      toValue: showAddCustomFoodScreen ? 0 : height,
       duration: ANIM_DURATION,
       useNativeDriver: true,
+      easing: Easing.inOut(Easing.ease),
     }).start()
   }, [showAddCustomFoodScreen])
 
@@ -155,6 +164,7 @@ export default function App() {
       toValue: showCustomMealReviewScreen ? 0 : width,
       duration: ANIM_DURATION,
       useNativeDriver: true,
+      easing: Easing.inOut(Easing.ease),
     }).start()
   }, [showCustomMealReviewScreen])
 
@@ -163,6 +173,7 @@ export default function App() {
       toValue: showSavedMealsScreen ? 0 : width,
       duration: ANIM_DURATION,
       useNativeDriver: true,
+      easing: Easing.inOut(Easing.ease),
     }).start()
   }, [showSavedMealsScreen])
 
@@ -193,7 +204,7 @@ export default function App() {
     }
   }
 
-  const navigateTo = (screen) => {
+  const navigateTo = (screen, params = {}) => {
     forceClearCart();
     
     setActiveScreen(screen)
@@ -204,6 +215,19 @@ export default function App() {
       }, 50)
     } else {
       setIsFooterVisible(false)
+    }
+    
+    if (Object.keys(params).length > 0) {
+      screenParams.current = {
+        ...screenParams.current,
+        [screen]: {
+          ...screenParams.current?.[screen],
+          ...params
+        }
+      };
+      
+      // Debug log to ensure parameters are set correctly
+      console.log(`Set params for ${screen}:`, screenParams.current[screen]);
     }
   }
 
@@ -242,48 +266,70 @@ export default function App() {
   }
 
   const handleOpenAddOrEditCustomFood = (food: CustomFood | null = null) => {
-    setFoodToEdit(food)
-    setIsFooterVisible(false)
-
-
-    if (showAddFoodOptionsScreen) {
-      Animated.timing(addFoodOptionsTranslate, {
-        toValue: width,
+    setFoodToEdit(food);
+    setIsFooterVisible(false);
+    
+    addCustomFoodTranslate.setValue(height);
+    
+    setShowAddCustomFoodScreen(true);
+    
+    requestAnimationFrame(() => {
+      Animated.timing(addCustomFoodTranslate, {
+        toValue: 0,
         duration: ANIM_DURATION,
         useNativeDriver: true,
-      }).start(() => {
-        setShowAddFoodOptionsScreen(false)
-
-        setShowAddCustomFoodScreen(true)
-      })
-    } else {
-      setShowAddCustomFoodScreen(true)
-    }
-  }
+        easing: Easing.out(Easing.ease),
+      }).start();
+    });
+  };
 
   const handleCloseAddCustomFood = () => {
-    // Signal that we should refresh the food list in AddMealLogScreen
-    const shouldRefreshFoods = showAddCustomFoodScreen;
-    
     Animated.timing(addCustomFoodTranslate, {
-      toValue: width,
+      toValue: height,
       duration: ANIM_DURATION,
       useNativeDriver: true,
+      easing: Easing.inOut(Easing.ease),
     }).start(() => {
       setShowAddCustomFoodScreen(false);
       setFoodToEdit(null);
-      
-      // If we're returning from adding a food, fetch the latest foods
-      if (shouldRefreshFoods && auth.currentUser) {
-        console.log("Refreshing foods after adding custom food");
-        // The AddMealLogScreen will automatically refresh on focus
-      }
     });
   };
 
   const handleSaveOrUpdateCustomFood = (savedFood: CustomFood) => {
     console.log("Saved/Updated food:", savedFood);
-    handleCloseAddCustomFood();
+    
+    screenParams.current = {
+      ...screenParams.current,
+      addMeal: {
+        ...screenParams.current?.addMeal,
+        foodChanged: true,
+        successMessage: `${savedFood.name} ${foodToEdit ? 'updated' : 'added'} successfully!`
+      }
+    };
+    
+    Animated.timing(addCustomFoodTranslate, {
+      toValue: height,
+      duration: ANIM_DURATION,
+      useNativeDriver: true,
+      easing: Easing.out(Easing.ease),
+    }).start(() => {
+      setShowAddCustomFoodScreen(false);
+      setFoodToEdit(null);
+      
+      if (showAddFoodOptionsScreen) {
+        Animated.timing(addFoodOptionsTranslate, {
+          toValue: width,
+          duration: ANIM_DURATION,
+          useNativeDriver: true,
+          easing: Easing.out(Easing.ease),
+        }).start(() => {
+          setShowAddFoodOptionsScreen(false);
+          navigateTo("addMeal");
+        });
+      } else {
+        navigateTo("addMeal");
+      }
+    });
   };
 
   const handleOpenMealReview = (items, defaultMealName = "") => {
@@ -369,7 +415,10 @@ export default function App() {
     <SafeAreaProvider>
       <CartProvider>
         <View style={styles.container}>
-          <ImageBackground source={customBackground ? { uri: customBackground } : require("../assets/bg-dark.jpg")} style={styles.backgroundImage}>
+          <ImageBackground 
+            source={customBackground ? { uri: customBackground } : undefined} 
+            style={styles.backgroundImage}
+          >
             <Animated.View style={[styles.screenContainer, { transform: [{ translateX: homeTranslate }] }]}>
               <HomeScreen
                 onFooterVisibilityChange={setIsFooterVisible}
@@ -414,6 +463,18 @@ export default function App() {
                     }
                   },
                   goBack: () => navigateTo("home"),
+                  getParam: (param) => {
+                    return screenParams.current?.addMeal?.[param] || null;
+                  },
+                  setParams: (params) => {
+                    screenParams.current = {
+                      ...screenParams.current,
+                      addMeal: {
+                        ...screenParams.current?.addMeal,
+                        ...params
+                      }
+                    };
+                  }
                 }}
               />
             </Animated.View>
@@ -466,13 +527,12 @@ export default function App() {
             )}
             
             {showAddFoodOptionsScreen && (
-              <Animated.View style={[styles.fullScreenModal, { transform: [{ translateX: addFoodOptionsTranslate }] }]}>
+              <Animated.View style={[styles.fullScreenModal, styles.optionsScreenModal, { transform: [{ translateX: addFoodOptionsTranslate }] }]}>
                 <AddFoodOptionsScreen
                   navigation={{
                     navigate: (screen, params) => {
                       if (screen === "AddCustomFood") {
                         handleOpenAddOrEditCustomFood()
-                        handleCloseAddFoodOptions()
                       } else if (screen === "SavedMeals") {
                         setShowSavedMealsScreen(true)
                         handleCloseAddFoodOptions()
@@ -487,18 +547,27 @@ export default function App() {
             )}
             
             {showAddCustomFoodScreen && (
-              <Animated.View style={[styles.fullScreenModal, { transform: [{ translateX: addCustomFoodTranslate }] }]}>
+              <Animated.View 
+                style={[
+                  styles.fullScreenModal, 
+                  styles.customFoodScreenModal, 
+                  { transform: [{ translateY: addCustomFoodTranslate }] }
+                ]}
+              >
                 <AddCustomFoodScreen
                   navigation={{
-                    navigate: (screen, params) => {
-                      console.log(`Navigation to ${screen} not implemented`)
-                    },
                     goBack: handleCloseAddCustomFood,
                     save: handleSaveOrUpdateCustomFood,
+                    getParam: (param) => {
+                      if (param === 'foodChanged') {
+                        return true;
+                      }
+                      return null;
+                    }
                   }}
                   route={{
                     params: {
-                      foodToEdit: foodToEdit as any,
+                      foodToEdit: foodToEdit
                     },
                   }}
                 />
@@ -535,6 +604,8 @@ const styles = StyleSheet.create({
   backgroundImage: {
     flex: 1,
     resizeMode: "cover",
+    width: "100%",
+    backgroundColor: "#000",
   },
   screenContainer: {
     position: "absolute",
@@ -543,6 +614,8 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: "#000",
+    width: "100%",
+    overflow: "hidden",
   },
   placeholderScreen: {
     flex: 1,
@@ -571,7 +644,8 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: "#000",
-    zIndex: 10,
+    width: "100%",
+    overflow: "hidden",
   },
   loadingContainer: {
     flex: 1,
@@ -589,19 +663,28 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  optionsScreenModal: {
+    zIndex: 1,
+  },
+  customFoodScreenModal: {
+    zIndex: 10,
+    transform: [{ translateY: 0 }],
+  },
 })
 
 interface CustomFood {
-  id?: string
-  name: string
-  protein: number
-  carbs: number
-  fat: number
-  calories: number
-  sugar?: number
-  fibers?: number
-  sodium?: number
-  servingSize?: number
-  imageUrl?: string
-  isFavorite: boolean
+  id?: string;
+  name: string;
+  protein: number;
+  carbs: number;
+  fat: number;
+  calories: number;
+  sugar: number;
+  fibers: number;
+  sodium: number;
+  servingSize: number;
+  servingUnit: string;
+  imageUrl?: string;
+  isFavorite: boolean;
+  isUserCreated?: boolean;
 }
