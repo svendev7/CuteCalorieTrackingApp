@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import {
   View,
   Text,
@@ -18,6 +18,10 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
   ActivityIndicator,
+  FlatList,
+  LayoutAnimation,
+  UIManager,
+  Easing,
 } from "react-native"
 import { Ionicons, MaterialCommunityIcons, AntDesign } from "@expo/vector-icons" // Using Ionicons for cart
 import { auth } from "../../config/firebase"
@@ -33,11 +37,13 @@ import {
   deleteMeal,
   clearAllCartItems,
   forceResetAllCartItems,
-  saveCustomFood
+  saveCustomFood,
+  updateMeal
 } from "../../services/mealService"
 import { Swipeable, GestureHandlerRootView } from "react-native-gesture-handler"
 import { useCart } from "../../context/CartContext"
 import FoodEditScreen from "../editting/FoodEditScreen"
+import SavedMealsEditScreen from "../editting/SavedMealsEditScreen"
 import Header from "../../components/header/Header"
 import SearchBar from "../../components/header/SearchBar"
 import SimpleToast from "../../components/toast/SimpleToast"
@@ -59,15 +65,16 @@ interface FoodItem {
   isFavorite: boolean
   servingSize?: number
   servingUnit?: string
+  imageUrl?: string
 }
 
 interface MealItem {
   id: string
   name: string
-  calories: number
   protein: number
   carbs: number
   fat: number
+  calories: number
   sodium?: number
   sugar?: number
   fibers?: number
@@ -75,6 +82,9 @@ interface MealItem {
   isFavorite: boolean
   servingSize?: number
   servingUnit?: string
+  imageUrl?: string
+  isUserCreated?: boolean
+  userId?: string
 }
 
 interface SavedFoodsScreenProps {
@@ -123,6 +133,8 @@ const SavedFoodsScreen: React.FC<SavedFoodsScreenProps> = ({ navigation }) => {
   // Add state for food edit screen
   const [showFoodEdit, setShowFoodEdit] = useState(false)
   const [selectedFoodToEdit, setSelectedFoodToEdit] = useState<FoodItem | null>(null)
+  const [showMealEdit, setShowMealEdit] = useState(false)
+  const [selectedMealToEdit, setSelectedMealToEdit] = useState<MealItem | null>(null)
   
   // Add state for delete confirmation modal
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -301,7 +313,7 @@ const SavedFoodsScreen: React.FC<SavedFoodsScreenProps> = ({ navigation }) => {
   // Helper functions to transform meals and foods
   const transformMeal = (filter: "Recent" | "Created" | "Favorites") => (meal: any): MealItem => ({
     id: meal.id,
-    name: meal.mealName,
+    name: meal.mealName || meal.name,
     calories: meal.calories,
     protein: meal.protein,
     carbs: meal.carbs,
@@ -312,7 +324,10 @@ const SavedFoodsScreen: React.FC<SavedFoodsScreenProps> = ({ navigation }) => {
     type: filter,
     isFavorite: meal.isFavorite || false,
     servingSize: meal.servingSize,
-    servingUnit: meal.servingUnit || 'g',
+    servingUnit: meal.servingUnit || 'serving',
+    imageUrl: meal.imageUrl,
+    isUserCreated: meal.isUserCreated || meal.isCustom || false,
+    userId: meal.userId
   });
   
   const transformFood = (filter: "Recent" | "Created" | "Favorites") => (food: any): FoodItem => ({
@@ -329,46 +344,52 @@ const SavedFoodsScreen: React.FC<SavedFoodsScreenProps> = ({ navigation }) => {
     isFavorite: food.isFavorite || false,
     servingSize: food.servingSize,
     servingUnit: food.servingUnit || 'g',
+    imageUrl: food.imageUrl,
   });
-  
+
+  // Modify handleTabPress to animate layout changes
   const handleTabPress = (tabName: string) => {
+    if (tabName === activeTab) return;
+
     // Animate tab indicator
     Animated.spring(tabIndicatorPosition, {
       toValue: tabName === "Foods" ? 0 : 1,
-      friction: 20, // Higher friction = less bouncy
-      tension: 100, // Lower tension = slower
-      useNativeDriver: false,
-    }).start()
-    
-    setActiveTab(tabName)
-    setActiveFilter("Recent")
-    // Reset filter indicator position
-    Animated.spring(filterIndicatorPosition, {
-      toValue: 0, // 'Recent' is at position 0
       friction: 20,
       tension: 100,
-      useNativeDriver: false,
-    }).start()
-    
-    setSearchBarSticky(false)
-  }
+      useNativeDriver: true,
+    }).start();
 
+    // Reset filter indicator position
+    Animated.spring(filterIndicatorPosition, {
+      toValue: 0,
+      friction: 20,
+      tension: 100,
+      useNativeDriver: true,
+    }).start();
+
+    // Update state immediately
+    setActiveTab(tabName);
+    setActiveFilter("Recent");
+    setSearchBarSticky(false);
+  };
+
+  // Modify handleFilterPress similarly
   const handleFilterPress = (filterName: string) => {
-    // Calculate position based on filter index
-    const filterIndex = ["Recent", "Created", "Favorites"].indexOf(filterName)
-    
+    if (filterName === activeFilter) return;
+
     // Animate filter indicator
+    const filterIndex = ["Recent", "Created", "Favorites"].indexOf(filterName);
     Animated.spring(filterIndicatorPosition, {
       toValue: filterIndex,
       friction: 20,
       tension: 100,
-      useNativeDriver: false,
-    }).start()
-    
-    setActiveFilter(filterName)
-    
-    setSearchBarSticky(false)
-  }
+      useNativeDriver: true,
+    }).start();
+
+    // Update state immediately
+    setActiveFilter(filterName);
+    setSearchBarSticky(false);
+  };
 
   const handleAddItemToMeal = (item: FoodItem | MealItem, selectedQuantity = "100", selectedUnit = "g") => {
     // Determine item type based on active tab
@@ -398,15 +419,15 @@ const SavedFoodsScreen: React.FC<SavedFoodsScreenProps> = ({ navigation }) => {
   }
 
   const handleEditItem = (item: FoodItem | MealItem) => {
-    // We only support editing foods for now
-    if (activeTab === "Meals") {
-      Alert.alert("Edit Not Available", "Editing meals is not available in this view. Please use the Meal Viewer to edit meals.");
-      return;
+    if (activeTab === "Foods") {
+      // Set the selected food for editing
+      setSelectedFoodToEdit(item as FoodItem);
+      setShowFoodEdit(true);
+    } else {
+      // Set the selected meal for editing
+      setSelectedMealToEdit(item as MealItem);
+      setShowMealEdit(true);
     }
-    
-    // Set the selected food for editing
-    setSelectedFoodToEdit(item as FoodItem);
-    setShowFoodEdit(true);
   };
 
   const handleFoodPress = (item: FoodItem | MealItem) => {
@@ -813,77 +834,13 @@ const SavedFoodsScreen: React.FC<SavedFoodsScreenProps> = ({ navigation }) => {
     )
   }
 
-  const renderContent = () => {
-    if (loading && (foodItems.Recent.length === 0 && mealItems.Recent.length === 0)) {
-      return (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#3E92CC" />
-          <Text style={styles.loadingText}>Loading...</Text>
-        </View>
-      )
-    }
+  // Modify renderContent - extract just the item rendering logic
+  const renderItem = ({ item }: { item: FoodItem | MealItem }) => {
+    // Determine if this is a food or meal item
+    const isFood = activeTab === "Foods"
     
-    if (error) {
-      return (
-        <View style={{
-          flex: 1,
-          justifyContent: "center",
-          alignItems: "center",
-          paddingTop: 40,
-        }}>
-          <MaterialCommunityIcons name="alert-circle" size={40} color="#FF3B30" />
-          <Text style={{
-            color: "#FF3B30",
-            fontSize: 16,
-            textAlign: "center",
-            marginVertical: 10,
-            paddingHorizontal: 20,
-          }}>{error}</Text>
-          <TouchableOpacity onPress={fetchAllData} style={{
-            backgroundColor: "#3E92CC",
-            paddingVertical: 8,
-            paddingHorizontal: 16,
-            borderRadius: 8,
-            marginTop: 10,
-          }}>
-            <Text style={{
-              color: "#FFFFFF",
-              fontWeight: "600",
-            }}>Retry</Text>
-          </TouchableOpacity>
-        </View>
-      )
-    }
-
-    // Use the correct items based on active tab and filter
-    const itemsToDisplay: (FoodItem | MealItem)[] = activeTab === "Foods" 
-      ? foodItems[activeFilter] || []
-      : mealItems[activeFilter] || [];
-
-    const filteredItems = itemsToDisplay.filter((item) => {
-      const nameMatch = item.name.toLowerCase().includes(searchText.toLowerCase())
-      return nameMatch
-    })
-
-    if (filteredItems.length === 0) {
-      return (
-        <View style={styles.emptyContainer}>
-          <MaterialCommunityIcons name={activeTab === "Foods" ? "food-off" : "food-variant-off"} size={60} color="#A0A0A0" />
-          <Text style={styles.emptyText}>No {activeTab.toLowerCase()} found</Text>
-          {activeTab === "Foods" && activeFilter === "Created" && (
-            <TouchableOpacity style={styles.addEmptyButton} onPress={handleAddFoodPress}>
-              <Text style={styles.addEmptyButtonText}>Add Custom Food</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      )
-    }
-
-    return filteredItems.map((item) => {
-      // Determine if this is a food or meal item
-      const isFood = activeTab === "Foods"
-      
-      return (
+    return (
+      <View style={styles.itemWrapper}>
         <Swipeable
           key={`swipeable-${item.id}`}
           ref={(ref) => (swipeableRefs.current[item.id] = ref)}
@@ -924,14 +881,12 @@ const SavedFoodsScreen: React.FC<SavedFoodsScreenProps> = ({ navigation }) => {
                 {favoriteItems[item.id] && (
                   <AntDesign name="star" size={16} color="#FFD700" style={styles.favoriteIcon} />
                 )}
-                {isFood && (
-                  <TouchableOpacity 
-                    style={styles.moreOptionsButton} 
-                    onPress={() => handleEditItem(item)}
-                  >
-                    <MaterialCommunityIcons name="pencil-outline" size={18} color="#EDEDED" />
-                  </TouchableOpacity>
-                )}
+                <TouchableOpacity 
+                  style={styles.moreOptionsButton} 
+                  onPress={() => handleEditItem(item)}
+                >
+                  <MaterialCommunityIcons name="pencil-outline" size={18} color="#EDEDED" />
+                </TouchableOpacity>
               </View>
 
               <View style={styles.macroWrapper}>
@@ -1004,9 +959,171 @@ const SavedFoodsScreen: React.FC<SavedFoodsScreenProps> = ({ navigation }) => {
             </View>
           </View>
         </Swipeable>
-      )
-    })
+      </View>
+    )
   }
+
+  // Create a new renderContent function for state handling, doesn't return UI
+  const getContentData = (): { data: (FoodItem | MealItem)[]; loading: boolean; error: string | null } => {
+    if (loading && (foodItems.Recent.length === 0 && mealItems.Recent.length === 0)) {
+      return { data: [], loading: true, error: null };
+    }
+    
+    if (error) {
+      return { data: [], loading: false, error: error };
+    }
+
+    // Use the correct items based on active tab and filter
+    const itemsToDisplay: (FoodItem | MealItem)[] = activeTab === "Foods" 
+      ? foodItems[activeFilter] || []
+      : mealItems[activeFilter] || [];
+
+    const filteredItems = itemsToDisplay.filter((item) => {
+      const nameMatch = item.name.toLowerCase().includes(searchText.toLowerCase())
+      return nameMatch
+    });
+
+    return { data: filteredItems, loading: false, error: null };
+  }
+
+  // Memoize filtered list data for performance
+  const displayedItems = useMemo(() => {
+    const { data } = getContentData();
+    return data;
+  }, [activeTab, activeFilter, searchText, foodItems, mealItems]);
+
+  // Create a rendering function for list header
+  const renderListHeader = () => {
+    return (
+      <View>
+        {/* Sticky search bar - remove condition to make it consistent for all tabs */}
+        {searchBarSticky && (
+          <View style={styles.stickySearchContainer}>
+            <SearchBar
+              value={searchText}
+              onChangeText={setSearchText}
+            />
+          </View>
+        )}
+        
+        {/* Updated Tabs with Animated Indicator */}
+        <View style={styles.tabContainer}>
+          {/* Animated Tab Indicator */}
+          <Animated.View 
+            style={[
+              styles.tabIndicator,
+              {
+                transform: [{ translateX: tabIndicatorPosition.interpolate({
+                  inputRange: [0,1], outputRange: [0, width/2-20], extrapolate:'clamp'
+                }) }],
+              },
+            ]}
+          />
+
+          <TouchableOpacity style={styles.tabButton} onPress={() => handleTabPress("Foods")}>
+            <Text style={[styles.tabText, activeTab === "Foods" && styles.activeTabText]}>Foods</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.tabButton} onPress={() => handleTabPress("Meals")}>
+            <Text style={[styles.tabText, activeTab === "Meals" && styles.activeTabText]}>Meals</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Updated Add Food Button */}
+        {activeTab === "Foods" && (
+          <TouchableOpacity style={styles.addFoodButton} onPress={handleAddFoodPress}>
+            <MaterialCommunityIcons name="plus" size={20} color="#45A557" />
+            <Text style={styles.addFoodButtonText}>Add food</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Updated Filters with Animated Indicator */}
+        <View style={styles.filterContainer}>
+          {/* Animated Filter Indicator */}
+          <Animated.View 
+            style={[
+              styles.filterIndicator,
+              {
+                width: (width - 40) / 3,
+                transform: [{ translateX: filterIndicatorPosition.interpolate({
+                  inputRange: [0,1,2], outputRange: [0, (width-40)/3, 2*(width-40)/3], extrapolate:'clamp'
+                }) }],
+              },
+            ]}
+          />
+
+          {["Recent", "Created", "Favorites"].map((filter) => (
+            <TouchableOpacity 
+              key={filter} 
+              style={styles.filterButton} 
+              onPress={() => handleFilterPress(filter)}
+              activeOpacity={0.7}
+              hitSlop={{top: 10, bottom: 10, left: 5, right: 5}}
+            >
+              <Text style={[styles.filterText, activeFilter === filter && styles.activeFilterText]}>{filter}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+    );
+  };
+
+  // Create List Empty Component
+  const ListEmptyComponent = () => {
+    const { loading, error } = getContentData();
+    
+    if (loading) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#3E92CC" />
+          <Text style={styles.loadingText}>Loading...</Text>
+        </View>
+      );
+    }
+    
+    if (error) {
+      return (
+        <View style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          paddingTop: 40,
+        }}>
+          <MaterialCommunityIcons name="alert-circle" size={40} color="#FF3B30" />
+          <Text style={{
+            color: "#FF3B30",
+            fontSize: 16,
+            textAlign: "center",
+            marginVertical: 10,
+            paddingHorizontal: 20,
+          }}>{error}</Text>
+          <TouchableOpacity onPress={fetchAllData} style={{
+            backgroundColor: "#3E92CC",
+            paddingVertical: 8,
+            paddingHorizontal: 16,
+            borderRadius: 8,
+            marginTop: 10,
+          }}>
+            <Text style={{
+              color: "#FFFFFF",
+              fontWeight: "600",
+            }}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    
+    return (
+      <View style={styles.emptyContainer}>
+        <MaterialCommunityIcons name={activeTab === "Foods" ? "food-off" : "food-variant-off"} size={60} color="#A0A0A0" />
+        <Text style={styles.emptyText}>No {activeTab.toLowerCase()} found</Text>
+        {activeTab === "Foods" && activeFilter === "Created" && (
+          <TouchableOpacity style={styles.addEmptyButton} onPress={handleAddFoodPress}>
+            <Text style={styles.addEmptyButtonText}>Add Custom Food</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
 
   const handleAddFoodPress = () => {
     // Navigate to the Add Food Options screen
@@ -1055,7 +1172,54 @@ const SavedFoodsScreen: React.FC<SavedFoodsScreenProps> = ({ navigation }) => {
   }
 
   // Add this state at the top with other states
-  const [searchBarSticky, setSearchBarSticky] = useState(false);
+  const [searchBarSticky, setSearchBarSticky] = useState(false)
+
+  // Add scroll-to-top refs and state
+  const recentListRef = useRef<FlatList>(null)
+  const createdListRef = useRef<FlatList>(null)
+  const favoritesListRef = useRef<FlatList>(null)
+  // Track scroll position for each tab separately
+  const [scrollPositions, setScrollPositions] = useState({
+    Recent: 0,
+    Created: 0,
+    Favorites: 0
+  });
+  // Scroll-to-top button animation value
+  const scrollButtonAnim = useRef(new Animated.Value(0)).current;
+
+  // Handler to update scroll position for the active filter
+  const handleScroll = (e: any) => {
+    const scrollY = e.nativeEvent.contentOffset.y;
+    setScrollPositions(prev => ({
+      ...prev,
+      [activeFilter]: scrollY
+    }));
+  }
+
+  // Calculate if button should be visible based on active filter's scroll position
+  const showScrollToTop = useMemo(() => {
+    return scrollPositions[activeFilter] > 200;
+  }, [scrollPositions, activeFilter]);
+
+  // Scroll to top function
+  const scrollToTop = () => {
+    const ref = activeFilter === 'Recent'
+      ? recentListRef.current
+      : activeFilter === 'Created'
+        ? createdListRef.current
+        : favoritesListRef.current
+    ref?.scrollToOffset({ offset: 0, animated: true })
+  }
+
+  // Animate button when visibility changes
+  useEffect(() => {
+    Animated.timing(scrollButtonAnim, {
+      toValue: showScrollToTop ? 1 : 0,
+      duration: 200, // Faster animation
+      easing: Easing.bezier(0.2, 0.8, 0.2, 1), // Smoother easing
+      useNativeDriver: true,
+    }).start()
+  }, [showScrollToTop])
 
   // Replace handleSaveFood function
   const handleSaveFood = async (updatedFood: FoodItem) => {
@@ -1164,6 +1328,128 @@ const SavedFoodsScreen: React.FC<SavedFoodsScreenProps> = ({ navigation }) => {
     }
   };
 
+  // Add these new functions for handling meal saving and deletion
+  const handleSaveMeal = async (updatedMeal: MealItem) => {
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) throw new Error("User not authenticated");
+      
+      // Show saving feedback
+      showToast("Saving meal...", 'loading');
+      
+      // Convert MealItem to Meal format
+      const mealToSave = {
+        id: updatedMeal.id,
+        userId: currentUser.uid,
+        mealName: updatedMeal.name,
+        protein: updatedMeal.protein,
+        carbs: updatedMeal.carbs,
+        fat: updatedMeal.fat,
+        calories: updatedMeal.calories,
+        sugar: updatedMeal.sugar || 0,
+        fibers: updatedMeal.fibers || 0,
+        sodium: updatedMeal.sodium || 0,
+        servingSize: updatedMeal.servingSize,
+        servingUnit: updatedMeal.servingUnit,
+        isFavorite: updatedMeal.isFavorite,
+        imageUrl: updatedMeal.imageUrl,
+        isCustom: true,
+        isUserCreated: true,
+        updatedAt: new Date() as any
+      };
+      
+      // Update in Firebase
+      await updateMeal(updatedMeal.id, mealToSave);
+      
+      // Close the edit screen
+      setShowMealEdit(false);
+      
+      // Update both Created and Favorites filters if applicable
+      const newMealItems = {...mealItems};
+      
+      // Add or update in Created list
+      const createdIndex = newMealItems.Created.findIndex(m => m.id === updatedMeal.id);
+      if (createdIndex >= 0) {
+        newMealItems.Created[createdIndex] = {...updatedMeal, type: "Created"};
+      } else {
+        newMealItems.Created.push({...updatedMeal, type: "Created"});
+      }
+      
+      // Update in Favorites list if it's a favorite
+      if (updatedMeal.isFavorite) {
+        const favIndex = newMealItems.Favorites.findIndex(m => m.id === updatedMeal.id);
+        if (favIndex >= 0) {
+          newMealItems.Favorites[favIndex] = {...updatedMeal, type: "Favorites"};
+        } else {
+          newMealItems.Favorites.push({...updatedMeal, type: "Favorites"});
+        }
+      } else {
+        // Remove from favorites if it was un-favorited
+        newMealItems.Favorites = newMealItems.Favorites.filter(m => m.id !== updatedMeal.id);
+      }
+      
+      // Update Recent list if it exists there
+      const recentIndex = newMealItems.Recent.findIndex(m => m.id === updatedMeal.id);
+      if (recentIndex >= 0) {
+        newMealItems.Recent[recentIndex] = {...updatedMeal, type: "Recent"};
+      }
+      
+      // Update state
+      setMealItems(newMealItems);
+      
+      // Update favorite state
+      setFavoriteItems(prev => ({
+        ...prev,
+        [updatedMeal.id]: updatedMeal.isFavorite
+      }));
+      
+      // Show success popup
+      showToast('Meal Successfully Updated', 'success');
+    } catch (error) {
+      console.error("Error saving meal:", error);
+      hideToast();
+      Alert.alert("Error", "Failed to save changes to meal");
+    }
+  };
+
+  const handleDeleteMeal = async (mealId: string) => {
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) throw new Error("User not authenticated");
+      
+      // Show deleting feedback
+      showToast("Deleting meal...", 'loading');
+      
+      // Delete from Firebase
+      await deleteMeal(mealId);
+      
+      // Close the edit screen
+      setShowMealEdit(false);
+      
+      // Remove from all filter lists
+      setMealItems(prev => ({
+        ...prev,
+        Recent: prev.Recent.filter(m => m.id !== mealId),
+        Created: prev.Created.filter(m => m.id !== mealId),
+        Favorites: prev.Favorites.filter(m => m.id !== mealId)
+      }));
+      
+      // Remove from favorites
+      setFavoriteItems(prev => {
+        const newFavorites = {...prev};
+        delete newFavorites[mealId];
+        return newFavorites;
+      });
+      
+      // Show success message
+      showToast('Meal Deleted', 'success');
+    } catch (error) {
+      console.error("Error deleting meal:", error);
+      hideToast();
+      Alert.alert("Error", "Failed to delete meal");
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <GestureHandlerRootView style={{ flex: 1 }}>
@@ -1212,87 +1498,112 @@ const SavedFoodsScreen: React.FC<SavedFoodsScreenProps> = ({ navigation }) => {
         />
 
         {/* Main Content Area */}
-        <ScrollView 
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollViewContent}
-          showsVerticalScrollIndicator={false} 
-          keyboardShouldPersistTaps="handled"
+        {renderListHeader()}
+        <View style={styles.listsWrapper}>
+          {/* Recent Items */}
+          <View 
+            style={[
+              styles.listContainer, 
+              { display: activeFilter === 'Recent' ? 'flex' : 'none' }
+            ]}
+          >
+            <FlatList
+              ref={recentListRef}
+              data={activeTab === 'Foods' ? foodItems.Recent : mealItems.Recent}
+              onScroll={handleScroll}
+              scrollEventThrottle={16}
+              renderItem={renderItem}
+              keyExtractor={(item) => item.id}
+              ListEmptyComponent={ListEmptyComponent}
+              contentContainerStyle={styles.scrollViewContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              removeClippedSubviews={true}
+              initialNumToRender={8}
+              maxToRenderPerBatch={10}
+              windowSize={10}
+              getItemLayout={(data, index) => ({ length: 112, offset: 112 * index, index })}
+              style={[styles.scrollView, activeFilter === 'Recent' ? {} : { display: 'none' }]}
+            />
+          </View>
+
+          {/* Created Items */}
+          <View 
+            style={[
+              styles.listContainer, 
+              { display: activeFilter === 'Created' ? 'flex' : 'none' }
+            ]}
+          >
+            <FlatList
+              ref={createdListRef}
+              data={activeTab === 'Foods' ? foodItems.Created : mealItems.Created}
+              onScroll={handleScroll}
+              scrollEventThrottle={16}
+              renderItem={renderItem}
+              keyExtractor={(item) => item.id}
+              ListEmptyComponent={ListEmptyComponent}
+              contentContainerStyle={styles.scrollViewContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              removeClippedSubviews={true}
+              initialNumToRender={8}
+              maxToRenderPerBatch={10}
+              windowSize={10}
+              getItemLayout={(data, index) => ({ length: 112, offset: 112 * index, index })}
+              style={[styles.scrollView, activeFilter === 'Created' ? {} : { display: 'none' }]}
+            />
+          </View>
+
+          {/* Favorites Items */}
+          <View 
+            style={[
+              styles.listContainer, 
+              { display: activeFilter === 'Favorites' ? 'flex' : 'none' }
+            ]}
+          >
+            <FlatList
+              ref={favoritesListRef}
+              data={activeTab === 'Foods' ? foodItems.Favorites : mealItems.Favorites}
+              onScroll={handleScroll}
+              scrollEventThrottle={16}
+              renderItem={renderItem}
+              keyExtractor={(item) => item.id}
+              ListEmptyComponent={ListEmptyComponent}
+              contentContainerStyle={styles.scrollViewContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              removeClippedSubviews={true}
+              initialNumToRender={8}
+              maxToRenderPerBatch={10}
+              windowSize={10}
+              getItemLayout={(data, index) => ({ length: 112, offset: 112 * index, index })}
+              style={[styles.scrollView, activeFilter === 'Favorites' ? {} : { display: 'none' }]}
+            />
+          </View>
+        </View>
+
+        {/* scroll-to-top button overlay */}
+        <Animated.View
+          style={[
+            styles.scrollToTopButton,
+            { 
+              opacity: scrollButtonAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0, 1],
+              }),
+              transform: [{ 
+                translateY: scrollButtonAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [50, 0]
+                }) 
+              }] 
+            }
+          ]}
         >
-          {/* Sticky search bar - remove condition to make it consistent for all tabs */}
-          {searchBarSticky && (
-            <View style={styles.stickySearchContainer}>
-              <SearchBar
-                value={searchText}
-                onChangeText={setSearchText}
-              />
-            </View>
-          )}
-          
-          {/* Updated Tabs with Animated Indicator */}
-          <View style={styles.tabContainer}>
-            {/* Animated Tab Indicator */}
-            <Animated.View 
-              style={[
-                styles.tabIndicator,
-                {
-                    transform: [
-                      {
-                    translateX: tabIndicatorPosition.interpolate({
-                      inputRange: [0, 1],
-                          outputRange: [0, width / 2 - 20], // Using pixel values instead of percentages
-                        }),
-                      },
-                    ],
-                  },
-                ]}
-              />
-
-              <TouchableOpacity style={styles.tabButton} onPress={() => handleTabPress("Foods")}>
-                <Text style={[styles.tabText, activeTab === "Foods" && styles.activeTabText]}>Foods</Text>
-            </TouchableOpacity>
-              <TouchableOpacity style={styles.tabButton} onPress={() => handleTabPress("Meals")}>
-                <Text style={[styles.tabText, activeTab === "Meals" && styles.activeTabText]}>Meals</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Updated Add Food Button */}
-            {activeTab === "Foods" && (
-            <TouchableOpacity style={styles.addFoodButton} onPress={handleAddFoodPress}>
-              <MaterialCommunityIcons name="plus" size={20} color="#45A557" />
-              <Text style={styles.addFoodButtonText}>Add food</Text>
-            </TouchableOpacity>
-          )}
-
-          {/* Updated Filters with Animated Indicator */}
-          <View style={styles.filterContainer}>
-            {/* Animated Filter Indicator */}
-            <Animated.View 
-              style={[
-                styles.filterIndicator,
-                {
-                    transform: [
-                      {
-                    translateX: filterIndicatorPosition.interpolate({
-                      inputRange: [0, 1, 2],
-                          outputRange: [0, (width - 40) / 3, (2 * (width - 40)) / 3], // Using pixel values
-                        }),
-                      },
-                    ],
-                    width: (width - 40) / 3, // Ensuring width is correct
-                  },
-                ]}
-              />
-
-              {["Recent", "Created", "Favorites"].map((filter) => (
-                <TouchableOpacity key={filter} style={styles.filterButton} onPress={() => handleFilterPress(filter)}>
-                  <Text style={[styles.filterText, activeFilter === filter && styles.activeFilterText]}>{filter}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* Content List */}
-            <View style={styles.listContainer}>{renderContent()}</View>
-        </ScrollView>
+          <TouchableOpacity onPress={scrollToTop} activeOpacity={0.7}>
+            <MaterialCommunityIcons name="arrow-up" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+        </Animated.View>
 
         <View style={styles.footer}>
           <TouchableOpacity 
@@ -1319,6 +1630,17 @@ const SavedFoodsScreen: React.FC<SavedFoodsScreenProps> = ({ navigation }) => {
             onSave={handleSaveFood}
             onDelete={handleDeleteFood}
             visible={showFoodEdit}
+          />
+        )}
+
+        {/* Add the SavedMealsEditScreen component */}
+        {selectedMealToEdit && (
+          <SavedMealsEditScreen
+            meal={selectedMealToEdit}
+            onClose={() => setShowMealEdit(false)}
+            onSave={handleSaveMeal}
+            onDelete={handleDeleteMeal}
+            visible={showMealEdit}
           />
         )}
 
@@ -1418,6 +1740,7 @@ const styles = StyleSheet.create({
     marginTop: 15,
     borderRadius: 8,
     height: 36,
+    marginBottom: 8,
     position: "relative",
   },
   filterIndicator: {
@@ -1441,7 +1764,7 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
   listContainer: {
-    paddingHorizontal: 20,
+    flex: 1,
     marginTop: 15,
   },
   listItem: {
@@ -1925,6 +2248,27 @@ const styles = StyleSheet.create({
   retryText: {
     color: "#FFFFFF",
     fontWeight: "600",
+  },
+  itemWrapper: {
+    paddingHorizontal: 20,
+    marginBottom: 0,
+  },
+  scrollToTopButton: {
+    position: 'absolute',
+    bottom: 90,           // Higher position above footer
+    left: 25,             // Now on left side instead of right
+    backgroundColor: '#1C1C1E',
+    borderRadius: 20,
+    padding: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 5,
+    zIndex: 100,
+  },
+  listsWrapper: {
+    flex: 1,
   },
 })
 

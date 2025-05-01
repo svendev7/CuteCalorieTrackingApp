@@ -18,11 +18,11 @@ import {
 import { MaterialCommunityIcons, Ionicons, AntDesign } from "@expo/vector-icons"
 import * as ImagePicker from 'expo-image-picker'
 import { auth } from "../../config/firebase"
-import { updateFavoriteStatus, deleteUserFood } from "../../services/mealService"
+import { updateFavoriteStatus, deleteMeal } from "../../services/mealService"
 
 const { width, height } = Dimensions.get("window")
 
-interface FoodItem {
+interface MealItem {
   id: string
   name: string
   protein: number
@@ -38,72 +38,73 @@ interface FoodItem {
   servingUnit?: string
   imageUrl?: string
   isUserCreated?: boolean
+  userId?: string
 }
 
-interface FoodEditScreenProps {
-  food: FoodItem
+interface SavedMealsEditScreenProps {
+  meal: MealItem
   onClose: () => void
-  onSave: (updatedFood: FoodItem) => void
-  onDelete: (foodId: string) => void
+  onSave: (updatedMeal: MealItem) => void
+  onDelete: (mealId: string) => void
   visible: boolean
 }
 
-const FoodEditScreen: React.FC<FoodEditScreenProps> = ({ food, onClose, onSave, onDelete, visible }) => {
-  const [editedFood, setEditedFood] = useState<FoodItem>({ 
-    ...food,
-    servingSize: food.servingSize || 100,
-    servingUnit: food.servingUnit || 'g',
-    isFavorite: food.isFavorite || false
+const SavedMealsEditScreen: React.FC<SavedMealsEditScreenProps> = ({ meal, onClose, onSave, onDelete, visible }) => {
+  const [editedMeal, setEditedMeal] = useState<MealItem>({ 
+    ...meal,
+    servingSize: meal.servingSize || 100,
+    servingUnit: meal.servingUnit || 'g',
+    isFavorite: meal.isFavorite || false
   })
   
   const [inputValues, setInputValues] = useState({
-    name: food.name,
-    protein: food.protein.toString(),
-    carbs: food.carbs.toString(),
-    fat: food.fat.toString(),
-    calories: food.calories.toString(),
-    sodium: (food.sodium || 0).toString(),
-    sugar: (food.sugar || 0).toString(),
-    fibers: (food.fibers || 0).toString(),
-    servingSize: (food.servingSize || 100).toString(),
+    name: meal.name,
+    protein: meal.protein.toString(),
+    carbs: meal.carbs.toString(),
+    fat: meal.fat.toString(),
+    calories: meal.calories.toString(),
+    sodium: (meal.sodium || 0).toString(),
+    sugar: (meal.sugar || 0).toString(),
+    fibers: (meal.fibers || 0).toString(),
+    servingSize: (meal.servingSize || 100).toString(),
   })
   
-  const [servingUnit, setServingUnit] = useState(food.servingUnit || 'g')
+  const [servingUnit, setServingUnit] = useState(meal.servingUnit || 'g')
   const [isSaving, setSaving] = useState(false)
   const contentOffset = useState(new Animated.Value(0))[0]
 
-  // Add effect to update states when food prop changes
+  // Add effect to update states when meal prop changes
   useEffect(() => {
-    setEditedFood({
-      ...food,
-      servingSize: food.servingSize || 100,
-      servingUnit: food.servingUnit || 'g',
-      isFavorite: food.isFavorite || false
+    setEditedMeal({
+      ...meal,
+      servingSize: meal.servingSize || 100,
+      servingUnit: meal.servingUnit || 'g',
+      isFavorite: meal.isFavorite || false
     })
     
     setInputValues({
-      name: food.name,
-      protein: food.protein.toString(),
-      carbs: food.carbs.toString(),
-      fat: food.fat.toString(),
-      calories: food.calories.toString(),
-      sodium: (food.sodium || 0).toString(),
-      sugar: (food.sugar || 0).toString(),
-      fibers: (food.fibers || 0).toString(),
-      servingSize: (food.servingSize || 100).toString(),
+      name: meal.name,
+      protein: meal.protein.toString(),
+      carbs: meal.carbs.toString(),
+      fat: meal.fat.toString(),
+      calories: meal.calories.toString(),
+      sodium: (meal.sodium || 0).toString(),
+      sugar: (meal.sugar || 0).toString(),
+      fibers: (meal.fibers || 0).toString(),
+      servingSize: (meal.servingSize || 100).toString(),
     })
     
-    setServingUnit(food.servingUnit || 'g')
-  }, [food])
+    setServingUnit(meal.servingUnit || 'g')
+  }, [meal])
 
   const handleSave = async () => {
     setSaving(true)
     
     try {
-      // Prepare updated food object
-      const updatedFood: FoodItem = {
-        ...food,
-        ...editedFood,
+      // Prepare updated meal object
+      const updatedMeal: MealItem = {
+        ...meal,
+        ...editedMeal,
         servingUnit: servingUnit,
         servingSize: parseInt(inputValues.servingSize, 10) || 100,
         // Make sure all macros are parsed as numbers
@@ -117,18 +118,18 @@ const FoodEditScreen: React.FC<FoodEditScreenProps> = ({ food, onClose, onSave, 
       }
 
       // Save and close
-      await onSave(updatedFood)
+      await onSave(updatedMeal)
     } catch (error) {
-      console.error('Error saving food:', error)
+      console.error('Error saving meal:', error)
     } finally {
       setSaving(false)
     }
   }
 
-  const handleDeleteFood = () => {
+  const handleDeleteMeal = () => {
     Alert.alert(
-      "Delete Food",
-      `Are you sure you want to delete ${food.name}?`,
+      "Delete Meal",
+      `Are you sure you want to delete ${meal.name}?`,
       [
         {
           text: "Cancel",
@@ -138,7 +139,7 @@ const FoodEditScreen: React.FC<FoodEditScreenProps> = ({ food, onClose, onSave, 
           text: "Delete",
           style: "destructive",
           onPress: () => {
-            onDelete(food.id)
+            onDelete(meal.id)
           }
         }
       ]
@@ -148,7 +149,7 @@ const FoodEditScreen: React.FC<FoodEditScreenProps> = ({ food, onClose, onSave, 
   const handleToggleFavorite = async () => {
     try {
       // Update locally first (optimistic UI update)
-      setEditedFood(prev => ({
+      setEditedMeal(prev => ({
         ...prev,
         isFavorite: !prev.isFavorite
       }))
@@ -159,13 +160,13 @@ const FoodEditScreen: React.FC<FoodEditScreenProps> = ({ food, onClose, onSave, 
       
       await updateFavoriteStatus(
         currentUser.uid,
-        food.id,
-        !editedFood.isFavorite,
-        "food"
+        meal.id,
+        !editedMeal.isFavorite,
+        "meal"
       )
     } catch (error) {
       // Revert on error
-      setEditedFood(prev => ({
+      setEditedMeal(prev => ({
         ...prev,
         isFavorite: !prev.isFavorite
       }))
@@ -174,14 +175,14 @@ const FoodEditScreen: React.FC<FoodEditScreenProps> = ({ food, onClose, onSave, 
     }
   }
 
-  const handleInputChange = (field: keyof FoodItem, value: string) => {
+  const handleInputChange = (field: keyof MealItem, value: string) => {
     // Update input field value
     setInputValues(prev => ({
       ...prev,
       [field]: value
     }))
     
-    // For numeric fields, update the editedFood state
+    // For numeric fields, update the editedMeal state
     if (
       field === "protein" ||
       field === "carbs" ||
@@ -194,25 +195,25 @@ const FoodEditScreen: React.FC<FoodEditScreenProps> = ({ food, onClose, onSave, 
     ) {
       const numberValue = value === "" ? 0 : Number.parseFloat(value)
       if (!isNaN(numberValue)) {
-        setEditedFood(prev => ({
+        setEditedMeal(prev => ({
           ...prev,
           [field]: numberValue
         }))
       }
     } else {
       // For non-numeric fields like name
-      setEditedFood(prev => ({
+      setEditedMeal(prev => ({
         ...prev,
         [field]: value
       }))
     }
   }
 
-  const handleInputBlur = (field: keyof FoodItem) => {
+  const handleInputBlur = (field: keyof MealItem) => {
     if (inputValues[field] === "") {
       setInputValues(prev => ({
         ...prev,
-        [field]: field === "name" ? "Unnamed Food" : "0"
+        [field]: field === "name" ? "Unnamed Meal" : "0"
       }))
     }
     
@@ -257,7 +258,7 @@ const FoodEditScreen: React.FC<FoodEditScreenProps> = ({ food, onClose, onSave, 
       
       if (!result.canceled) {
         // Use the selected image URI
-        setEditedFood(prev => ({
+        setEditedMeal(prev => ({
           ...prev,
           imageUrl: result.assets[0].uri
         }))
@@ -275,12 +276,12 @@ const FoodEditScreen: React.FC<FoodEditScreenProps> = ({ food, onClose, onSave, 
             <TouchableOpacity onPress={onClose} style={styles.backButton}>
               <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Edit Food</Text>
+            <Text style={styles.headerTitle}>Edit Meal</Text>
             <TouchableOpacity onPress={handleToggleFavorite} style={styles.favoriteButton}>
               <AntDesign 
-                name={editedFood.isFavorite ? "star" : "staro"} 
+                name={editedMeal.isFavorite ? "star" : "staro"} 
                 size={22} 
-                color={editedFood.isFavorite ? "#FFD700" : "#FFFFFF"} 
+                color={editedMeal.isFavorite ? "#FFD700" : "#FFFFFF"} 
               />
             </TouchableOpacity>
           </View>
@@ -293,32 +294,29 @@ const FoodEditScreen: React.FC<FoodEditScreenProps> = ({ food, onClose, onSave, 
             <Animated.View style={[styles.contentContainer, { transform: [{ translateY: contentOffset }] }]}>
               <View style={styles.imageContainer}>
                 <Image
-                  source={{ uri: editedFood.imageUrl || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=400" }}
-                  style={styles.foodImage}
+                  source={{ uri: editedMeal.imageUrl || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=400" }}
+                  style={styles.mealImage}
                   resizeMode="cover"
                 />
                 <TouchableOpacity style={styles.changeImageButton} onPress={handleAddImage}>
-                  <Text style={styles.changeImageText}>{editedFood.imageUrl ? 'Change Image' : 'Add Image'}</Text>
+                  <Text style={styles.changeImageText}>{editedMeal.imageUrl ? 'Change Image' : 'Add Image'}</Text>
                 </TouchableOpacity>
               </View>
 
               <View style={styles.formSection}>
-                <Text style={styles.sectionTitle}>Food Details</Text>
-
                 <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Food Name</Text>
+                  <Text style={styles.inputLabel}>Meal Name</Text>
                   <TextInput
                     style={styles.textInput}
                     value={inputValues.name}
                     onChangeText={(text) => handleInputChange("name", text)}
-                    placeholder="Enter food name"
+                    placeholder="Enter meal name"
                     placeholderTextColor="#666666"
                     onFocus={handleInputFocus}
                     onBlur={() => handleInputBlur("name")}
                   />
                 </View>
-                
-                {/* Serving Size Section */}
+
                 <View style={styles.servingSizeContainer}>
                   <Text style={styles.inputLabel}>Serving Size</Text>
                   <View style={styles.servingSizeRow}>
@@ -332,7 +330,6 @@ const FoodEditScreen: React.FC<FoodEditScreenProps> = ({ food, onClose, onSave, 
                       placeholder="100"
                       placeholderTextColor="#666666"
                     />
-                    
                     <View style={styles.unitSelector}>
                       {["g", "ml", "oz"].map((unitOption) => (
                         <TouchableOpacity 
@@ -423,7 +420,7 @@ const FoodEditScreen: React.FC<FoodEditScreenProps> = ({ food, onClose, onSave, 
                   </View>
 
                   <View style={styles.inputGroupThird}>
-                    <Text style={styles.inputLabel}>Fibers (g)</Text>
+                    <Text style={styles.inputLabel}>Fiber (g)</Text>
                     <TextInput
                       style={styles.textInput}
                       value={inputValues.fibers}
@@ -455,7 +452,7 @@ const FoodEditScreen: React.FC<FoodEditScreenProps> = ({ food, onClose, onSave, 
           </ScrollView>
 
           <View style={styles.buttonContainer}>
-            <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteFood}>
+            <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteMeal}>
               <MaterialCommunityIcons name="delete-outline" size={20} color="#FF3B30" />
               <Text style={styles.deleteButtonText}>Delete</Text>
             </TouchableOpacity>
@@ -518,7 +515,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginVertical: 20,
   },
-  foodImage: {
+  mealImage: {
     width: width * 0.4,
     height: width * 0.4,
     borderRadius: width * 0.2,
@@ -541,12 +538,6 @@ const styles = StyleSheet.create({
   formSection: {
     marginBottom: 25,
     paddingHorizontal: 20,
-  },
-  sectionTitle: {
-    color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "600",
-    marginBottom: 15,
   },
   inputGroup: {
     marginBottom: 15,
@@ -676,4 +667,4 @@ const styles = StyleSheet.create({
   },
 })
 
-export default FoodEditScreen; 
+export default SavedMealsEditScreen; 

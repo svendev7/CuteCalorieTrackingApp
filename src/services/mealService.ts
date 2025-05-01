@@ -198,17 +198,18 @@ export const getSavedMealsByUserId = async (userId: string): Promise<Meal[]> => 
   try {
     const mealsRef = collection(db, 'meals');
     const q = query(
-      mealsRef, 
+      mealsRef,
       where('userId', '==', userId),
-      where('isCustom', '==', true),
-      orderBy('lastUsed', 'desc')
+      where('isCustom', '==', true)
     );
     const querySnapshot = await getDocs(q);
-    
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as Meal[];
+    const meals = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Meal));
+    // Sort by lastUsed descending
+    return meals.sort((a, b) => {
+      const aTime = a.lastUsed?.toMillis() || 0;
+      const bTime = b.lastUsed?.toMillis() || 0;
+      return bTime - aTime;
+    });
   } catch (error) {
     console.error('Error getting saved meals:', error);
     throw error;
@@ -239,18 +240,20 @@ export const getRecentMealsByUserId = async (userId: string, limitCount: number 
   try {
     const mealsRef = collection(db, 'meals');
     const q = query(
-      mealsRef, 
+      mealsRef,
       where('userId', '==', userId),
-      where('isLogged', '==', true),  
-      orderBy('lastUsed', 'desc'),
-      limit(limitCount)
+      where('isLogged', '==', true)
     );
     const querySnapshot = await getDocs(q);
-    
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as Meal[];
+    const meals = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Meal));
+    // Sort by lastUsed descending and limit
+    return meals
+      .sort((a, b) => {
+        const aTime = a.lastUsed?.toMillis() || 0;
+        const bTime = b.lastUsed?.toMillis() || 0;
+        return bTime - aTime;
+      })
+      .slice(0, limitCount);
   } catch (error) {
     console.error('Error getting recent meals:', error);
     throw error;
@@ -261,19 +264,20 @@ export const getMealsByDateRange = async (userId: string, startDate: string, end
   try {
     const mealsRef = collection(db, 'meals');
     const q = query(
-      mealsRef, 
+      mealsRef,
       where('userId', '==', userId),
       where('date', '>=', startDate),
-      where('date', '<=', endDate),
-      orderBy('date', 'desc'),
-      orderBy('loggedTime', 'desc')
+      where('date', '<=', endDate)
     );
     const querySnapshot = await getDocs(q);
-    
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as Meal[];
+    // Map and sort by date desc then loggedTime desc
+    const meals = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Meal));
+    return meals.sort((a, b) => {
+      if (a.date === b.date) {
+        return (b.loggedTime || '').localeCompare(a.loggedTime || '');
+      }
+      return b.date!.localeCompare(a.date!);
+    });
   } catch (error) {
     console.error('Error getting meals by date range:', error);
     throw error;
@@ -284,18 +288,15 @@ export const getMealsByDate = async (userId: string, date: string): Promise<Meal
   try {
     const mealsRef = collection(db, 'meals');
     const q = query(
-      mealsRef, 
+      mealsRef,
       where('userId', '==', userId),
       where('date', '==', date),
-      where('isCustom', '==', false),
-      orderBy('loggedTime', 'desc')
+      where('isCustom', '==', false)
     );
     const querySnapshot = await getDocs(q);
-    
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as Meal[];
+    // Map and sort by loggedTime desc
+    const meals = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Meal));
+    return meals.sort((a, b) => (b.loggedTime || '').localeCompare(a.loggedTime || ''));
   } catch (error) {
     console.error('Error getting meals by date:', error);
     throw error;
@@ -365,15 +366,15 @@ export const getUserFoodsByType = async (userId: string, type: string): Promise<
 };
 
 
-export const updateFavoriteStatus = async (userId: string, itemId: string, isFavorite: boolean, itemType: 'food' | 'meal') => {
+export const updateFavoriteStatus = async (userId: string, itemId: string, isFavorite: boolean, itemType: 'food' | 'meal'): Promise<boolean> => {
   try {
-    const itemRef = itemType === 'food' 
-      ? doc(db, 'users', userId, 'foods', itemId) 
+    const itemRef = itemType === 'food'
+      ? doc(db, 'users', userId, 'foods', itemId)
       : doc(db, 'meals', itemId);
     
     await updateDoc(itemRef, {
       isFavorite: isFavorite,
-      updatedAt: serverTimestamp()
+      updatedAt: serverTimestamp(),
     });
     
     return true;
@@ -383,15 +384,12 @@ export const updateFavoriteStatus = async (userId: string, itemId: string, isFav
   }
 };
 
-
-export const deleteUserFood = async (userId: string, itemId: string, itemType: 'food' | 'meal') => {
+export const deleteUserFood = async (userId: string, itemId: string, itemType: 'food' | 'meal'): Promise<boolean> => {
   try {
-    const itemRef = itemType === 'food' 
-      ? doc(db, 'users', userId, 'foods', itemId) 
+    const itemRef = itemType === 'food'
+      ? doc(db, 'users', userId, 'foods', itemId)
       : doc(db, 'meals', itemId);
-    
     await deleteDoc(itemRef);
-    
     return true;
   } catch (error) {
     console.error(`Error deleting ${itemType}:`, error);
@@ -399,17 +397,12 @@ export const deleteUserFood = async (userId: string, itemId: string, itemType: '
   }
 };
 
-
-export const saveCustomFood = async (userId: string, food: FoodData) => {
+export const saveCustomFood = async (userId: string, food: FoodData): Promise<string> => {
   try {
     const userFoodsRef = collection(db, 'users', userId, 'foods');
-    
     if (food.id) {
       const foodRef = doc(db, 'users', userId, 'foods', food.id);
-      await updateDoc(foodRef, {
-        ...food,
-        updatedAt: serverTimestamp()
-      });
+      await updateDoc(foodRef, { ...food, updatedAt: serverTimestamp() });
       return food.id;
     } else {
       const newFoodRef = await addDoc(userFoodsRef, {
@@ -418,7 +411,7 @@ export const saveCustomFood = async (userId: string, food: FoodData) => {
         addedToCart: food.addedToCart || false,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-        lastUsed: serverTimestamp()
+        lastUsed: serverTimestamp(),
       });
       return newFoodRef.id;
     }
@@ -428,16 +421,10 @@ export const saveCustomFood = async (userId: string, food: FoodData) => {
   }
 };
 
-
 export const updateFoodCartStatus = async (userId: string, foodId: string, addedToCart: boolean): Promise<boolean> => {
   try {
     const foodRef = doc(db, 'users', userId, 'foods', foodId);
-    
-    await updateDoc(foodRef, {
-      addedToCart: addedToCart,
-      lastUsed: serverTimestamp()
-    });
-    
+    await updateDoc(foodRef, { addedToCart, lastUsed: serverTimestamp() });
     return true;
   } catch (error) {
     console.error('Error updating food cart status:', error);
@@ -445,29 +432,20 @@ export const updateFoodCartStatus = async (userId: string, foodId: string, added
   }
 };
 
-
 export const clearAllCartItems = async (userId: string): Promise<boolean> => {
   try {
     if (!userId) {
       console.error('No user ID provided to clearAllCartItems');
       return false;
     }
-    
     const foodsRef = collection(db, 'users', userId, 'foods');
     const q = query(foodsRef, where('addedToCart', '==', true));
     const querySnapshot = await getDocs(q);
-    
-
     const batch = writeBatch(db);
-    
-    querySnapshot.docs.forEach(docSnapshot => {
-      const foodRef = doc(db, 'users', userId, 'foods', docSnapshot.id);
-      batch.update(foodRef, {
-        addedToCart: false,
-        lastUsed: serverTimestamp()
-      });
+    querySnapshot.docs.forEach((docSnap) => {
+      const foodRef = doc(db, 'users', userId, 'foods', docSnap.id);
+      batch.update(foodRef, { addedToCart: false, lastUsed: serverTimestamp() });
     });
-    
     await batch.commit();
     return true;
   } catch (error) {
@@ -476,37 +454,26 @@ export const clearAllCartItems = async (userId: string): Promise<boolean> => {
   }
 };
 
-
 export const forceResetAllCartItems = async (userId: string): Promise<boolean> => {
   if (!userId) {
     console.error('No user ID provided to forceResetAllCartItems');
     return false;
   }
-  
   try {
-    
     const foodsRef = collection(db, 'users', userId, 'foods');
     const querySnapshot = await getDocs(foodsRef);
-    
     if (querySnapshot.empty) {
       return true;
     }
-    
     const batch = writeBatch(db);
-    let updatedCount = 0;
-    
-    querySnapshot.docs.forEach(docSnapshot => {
-      const foodRef = doc(db, 'users', userId, 'foods', docSnapshot.id);
-      batch.update(foodRef, {
-        addedToCart: false,
-        lastUsed: serverTimestamp()
-      });
-      updatedCount++;
+    querySnapshot.docs.forEach((docSnap) => {
+      const foodRef = doc(db, 'users', userId, 'foods', docSnap.id);
+      batch.update(foodRef, { addedToCart: false, lastUsed: serverTimestamp() });
     });
-    
     await batch.commit();
     return true;
   } catch (error) {
+    console.error('Error force resetting cart items:', error);
     return false;
   }
-}; 
+};
