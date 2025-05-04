@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 const express = require('express');
 const { Pool } = require('pg');
 const jwt = require('jsonwebtoken');
@@ -9,11 +11,11 @@ app.use(express.json());
 app.use(cors());
 
 const pool = new Pool({
-  user: 'user',
-  host: 'db',
-  database: 'pebblypaldb',
-  password: 'password',
-  port: 5432,
+  user: process.env.DB_USER,
+  host: process.env.DB_HOST,
+  database: process.env.DB_NAME,
+  password: process.env.DB_PASSWORD,
+  port: process.env.DB_PORT,
 });
 
 app.post('/register', async (req, res) => {
@@ -31,7 +33,7 @@ app.post('/login', async (req, res) => {
   const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
   const user = result.rows[0];
   if (user && await bcrypt.compare(password, user.password)) {
-    const token = jwt.sign({ userId: user.id }, 'secret_key', { expiresIn: '1h' });
+    const token = jwt.sign({ userId: user.id }, process.env.SECRET_KEY, { expiresIn: '1h' });
     res.json({ token });
   } else {
     res.status(401).json({ error: 'Invalid credentials' });
