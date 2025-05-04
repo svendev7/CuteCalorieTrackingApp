@@ -1,43 +1,30 @@
 {
   "expo": {
-    "name": "SimpleApp",
-    "slug": "SimpleApp",
+    "name": "Pebbly",
+    "slug": "Pebbly",
     "version": "1.0.0",
+    "jsEngine": "jsc",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.SimpleApp",
-      "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
-      },
-      "googleServicesFile": "./GoogleService-Info.plist"
+      "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.anonymous.SimpleApp"
+      "edgeToEdgeEnabled": true
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    },
-    "extra": {
-      "eas": {
-        "projectId": "83b6caf9-e23d-422c-97dd-4882c8a8c865"
-      }
-    },
-    "owner": "aanvil7",
-    "plugins": [
-      "@react-native-firebase/app"
-    ]
+    }
   }
 }

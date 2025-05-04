@@ -9,14 +9,8 @@ dist/
 web-build/
 expo-env.d.ts
 
-# Firestore
-GoogleService-Info.plist
-firestore.rules
-firestore.index.json
-FIREBASE_SETUP.md
-TODO
-TODO.md
 # Native
+.kotlin/
 *.orig.*
 *.jks
 *.p8
